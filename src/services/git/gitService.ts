@@ -3,22 +3,33 @@ import simpleGit, { SimpleGit, StatusResult } from 'simple-git';
 import { FileChange, ChangesSummary } from './types';
 
 /**
+ * Interface for workspace folder provider (allows testing)
+ */
+export interface WorkspaceProvider {
+  getWorkspaceRoot(): string | undefined;
+}
+
+/**
+ * Default workspace provider using VS Code API
+ */
+export class VSCodeWorkspaceProvider implements WorkspaceProvider {
+  getWorkspaceRoot(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+}
+
+/**
  * Service for interacting with Git repositories
  * Provides methods to get changes, stage files, and create commits
  */
 export class GitService {
   private git: SimpleGit | null = null;
   private workspaceRoot: string | undefined;
+  private workspaceProvider: WorkspaceProvider;
 
-  constructor() {
-    this.workspaceRoot = this.getWorkspaceRoot();
-  }
-
-  /**
-   * Get the workspace root folder path
-   */
-  private getWorkspaceRoot(): string | undefined {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  constructor(workspaceProvider?: WorkspaceProvider) {
+    this.workspaceProvider = workspaceProvider ?? new VSCodeWorkspaceProvider();
+    this.workspaceRoot = this.workspaceProvider.getWorkspaceRoot();
   }
 
   /**
@@ -209,7 +220,7 @@ export class GitService {
    * Refresh the git instance (useful after workspace changes)
    */
   refresh(): void {
-    this.workspaceRoot = this.getWorkspaceRoot();
+    this.workspaceRoot = this.workspaceProvider.getWorkspaceRoot();
     this.git = null;
   }
 }
