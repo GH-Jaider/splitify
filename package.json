@@ -158,7 +158,9 @@
     "lint": "eslint src",
     "check-types": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "test:unit": "vscode-test --label unit",
+    "test:integration": "vscode-test --label integration"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
