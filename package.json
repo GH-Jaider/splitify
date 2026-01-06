@@ -28,6 +28,8 @@
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
     "lint": "eslint src",
+    "check-types": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.ts\"",
     "test": "vscode-test"
   },
   "devDependencies": {
@@ -37,6 +39,7 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.1",
+    "prettier": "^3.7.4",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.48.1",
