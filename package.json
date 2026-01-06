@@ -1,23 +1,151 @@
 {
   "name": "splitify",
-  "displayName": "splitify",
-  "description": "Splitify helps you turn messy, uncommitted changes into clean, atomic commits. It analyzes all your local modifications, intelligently groups them by intent using Copilot’s AI, and suggests meaningful commit messages — so you can commit multiple features or fixes with one click, without the mega-commit chaos",
+  "displayName": "Splitify",
+  "description": "Turn messy, uncommitted changes into clean, atomic commits. Analyzes your local modifications, groups them by intent using Copilot AI, and suggests meaningful commit messages.",
   "version": "0.0.1",
+  "publisher": "splitify",
   "engines": {
-    "vscode": "^1.107.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "SCM Providers",
+    "Machine Learning"
   ],
-  "activationEvents": [],
+  "keywords": [
+    "git",
+    "commits",
+    "ai",
+    "copilot",
+    "productivity",
+    "atomic commits"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "splitify.helloWorld",
-        "title": "Hello World"
+        "command": "splitify.analyze",
+        "title": "Analyze & Group Changes",
+        "icon": "$(group-by-ref-type)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.commitGroup",
+        "title": "Commit This Group",
+        "icon": "$(check)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.commitAll",
+        "title": "Commit All Groups",
+        "icon": "$(check-all)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.discardGroup",
+        "title": "Discard Group",
+        "icon": "$(trash)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.editGroupMessage",
+        "title": "Edit Commit Message",
+        "icon": "$(edit)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.refresh",
+        "title": "Refresh Analysis",
+        "icon": "$(refresh)",
+        "category": "Splitify"
       }
-    ]
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "splitify.analyze",
+          "group": "navigation@1",
+          "when": "scmProvider == git"
+        },
+        {
+          "command": "splitify.commitAll",
+          "group": "navigation@2",
+          "when": "scmProvider == git && splitify.hasGroups"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "splitify.refresh",
+          "when": "view == splitify.groupsView",
+          "group": "navigation"
+        },
+        {
+          "command": "splitify.commitAll",
+          "when": "view == splitify.groupsView && splitify.hasGroups",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "splitify.commitGroup",
+          "when": "view == splitify.groupsView && viewItem == commitGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "splitify.editGroupMessage",
+          "when": "view == splitify.groupsView && viewItem == commitGroup",
+          "group": "inline@2"
+        },
+        {
+          "command": "splitify.discardGroup",
+          "when": "view == splitify.groupsView && viewItem == commitGroup",
+          "group": "inline@3"
+        }
+      ]
+    },
+    "views": {
+      "scm": [
+        {
+          "id": "splitify.groupsView",
+          "name": "Splitify - Commit Groups",
+          "icon": "$(group-by-ref-type)",
+          "when": "splitify.hasGroups",
+          "contextualTitle": "Splitify"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Splitify",
+      "properties": {
+        "splitify.commitStyle": {
+          "type": "string",
+          "enum": [
+            "conventional",
+            "simple",
+            "emoji"
+          ],
+          "default": "conventional",
+          "description": "Style for generated commit messages"
+        },
+        "splitify.maxFilesPerGroup": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum files to include in a single commit group"
+        },
+        "splitify.autoStage": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically stage files when committing a group"
+        },
+        "splitify.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notifications after commits"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",

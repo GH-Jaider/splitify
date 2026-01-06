@@ -189,6 +189,16 @@ export class GroupingEngine {
   }
 
   /**
+   * Discard/remove a group without committing
+   *
+   * @param groupId - ID of the group to discard
+   */
+  discardGroup(groupId: string): void {
+    this._groups = this._groups.filter((g) => g.id !== groupId);
+    this._onGroupsChanged.fire(this._groups);
+  }
+
+  /**
    * Get a group by its ID
    *
    * @param groupId - ID of the group to find

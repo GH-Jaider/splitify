@@ -1,28 +1,58 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
+import { registerCommands } from "./commands";
+import { CommitGroupsTreeProvider } from "./views";
+import { GroupingEngine } from "./services/grouping";
+import { GitService } from "./services/git";
+import { AIService } from "./services/ai";
+import type { IGroupingEngine } from "./types";
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-  // Use the console to output diagnostic information (console.log) and errors (console.error)
-  // This line of code will only be executed once when your extension is activated
-  console.log('Congratulations, your extension "splitify" is now active!');
+// Global instances
+let groupingEngine: IGroupingEngine | undefined;
+let gitService: GitService | undefined;
+let aiService: AIService | undefined;
 
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
-  const disposable = vscode.commands.registerCommand(
-    "splitify.helloWorld",
-    () => {
-      // The code you place here will be executed every time your command is executed
-      // Display a message box to the user
-      vscode.window.showInformationMessage("Hello World from splitify!");
-    },
-  );
-
-  context.subscriptions.push(disposable);
+/**
+ * Getter for the grouping engine (used by commands)
+ */
+function getGroupingEngine(): IGroupingEngine | undefined {
+  return groupingEngine;
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+/**
+ * Called when the extension is activated
+ */
+export function activate(context: vscode.ExtensionContext) {
+  console.log("Splitify is activating...");
+
+  // Initialize services
+  gitService = new GitService();
+  aiService = new AIService();
+  groupingEngine = new GroupingEngine(gitService, aiService);
+
+  // Register all commands
+  registerCommands(context, getGroupingEngine);
+
+  // Create and register the tree view provider
+  const treeProvider = new CommitGroupsTreeProvider();
+  treeProvider.setGroupingEngine(groupingEngine);
+
+  const treeView = vscode.window.createTreeView("splitify.groupsView", {
+    treeDataProvider: treeProvider,
+    showCollapseAll: true,
+  });
+  context.subscriptions.push(treeView);
+
+  // Initialize context values
+  vscode.commands.executeCommand("setContext", "splitify.hasGroups", false);
+
+  console.log("Splitify activated successfully!");
+}
+
+/**
+ * Called when the extension is deactivated
+ */
+export function deactivate() {
+  groupingEngine = undefined;
+  gitService = undefined;
+  aiService = undefined;
+}
