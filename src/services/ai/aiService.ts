@@ -1,6 +1,10 @@
-import * as vscode from 'vscode';
-import { FileChangeInput, GroupingSuggestion, AIGroupingResponse } from './types';
-import { buildGroupingPrompt, MAX_DIFF_LENGTH } from './prompts';
+import * as vscode from "vscode";
+import {
+  FileChangeInput,
+  GroupingSuggestion,
+  AIGroupingResponse,
+} from "./types";
+import { buildGroupingPrompt, MAX_DIFF_LENGTH } from "./prompts";
 
 /**
  * Service for interacting with AI models to analyze and group code changes
@@ -16,10 +20,10 @@ export class AIService {
    */
   async analyzeAndGroupChanges(
     changes: FileChangeInput[],
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): Promise<GroupingSuggestion[]> {
     if (changes.length === 0) {
-      throw new Error('No changes to analyze');
+      throw new Error("No changes to analyze");
     }
 
     const model = await this.selectCopilotModel();
@@ -43,13 +47,13 @@ export class AIService {
    */
   private async selectCopilotModel(): Promise<vscode.LanguageModelChat> {
     const models = await vscode.lm.selectChatModels({
-      vendor: 'copilot',
-      family: 'gpt-4o',
+      vendor: "copilot",
+      family: "gpt-4o",
     });
 
     if (models.length === 0) {
       throw new Error(
-        'No Copilot model available. Please ensure GitHub Copilot is installed and activated.'
+        "No Copilot model available. Please ensure GitHub Copilot is installed and activated.",
       );
     }
 
@@ -63,9 +67,9 @@ export class AIService {
    * @returns The complete response text
    */
   private async collectStreamedResponse(
-    response: vscode.LanguageModelChatResponse
+    response: vscode.LanguageModelChatResponse,
   ): Promise<string> {
-    let fullResponse = '';
+    let fullResponse = "";
     for await (const chunk of response.text) {
       fullResponse += chunk;
     }
@@ -99,15 +103,20 @@ export class AIService {
       const parsed: AIGroupingResponse = JSON.parse(jsonStr.trim());
 
       if (!parsed.groups || !Array.isArray(parsed.groups)) {
-        throw new Error('Invalid response structure: missing groups array');
+        throw new Error("Invalid response structure: missing groups array");
       }
 
       return parsed.groups;
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error('Failed to parse AI grouping suggestions: Invalid JSON format');
+        throw new Error(
+          "Failed to parse AI grouping suggestions: Invalid JSON format",
+        );
       }
-      if (error instanceof Error && error.message.includes('Invalid response structure')) {
+      if (
+        error instanceof Error &&
+        error.message.includes("Invalid response structure")
+      ) {
         throw error;
       }
       throw new Error(`Failed to parse AI grouping suggestions: ${error}`);

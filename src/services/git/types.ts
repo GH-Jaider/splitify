@@ -5,7 +5,7 @@ export interface FileChange {
   /** Relative path to the file from the repository root */
   path: string;
   /** Type of change */
-  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked';
+  status: "added" | "modified" | "deleted" | "renamed" | "untracked";
   /** The diff content for this file */
   diff: string;
   /** Number of lines added */

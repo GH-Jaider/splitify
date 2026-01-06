@@ -1,6 +1,6 @@
-import * as vscode from 'vscode';
-import simpleGit, { SimpleGit, StatusResult } from 'simple-git';
-import { FileChange, ChangesSummary } from './types';
+import * as vscode from "vscode";
+import simpleGit, { SimpleGit, StatusResult } from "simple-git";
+import { FileChange, ChangesSummary } from "./types";
 
 /**
  * Interface for workspace folder provider (allows testing)
@@ -37,7 +37,7 @@ export class GitService {
    */
   private ensureGit(): SimpleGit {
     if (!this.workspaceRoot) {
-      throw new Error('No workspace folder open');
+      throw new Error("No workspace folder open");
     }
     if (!this.git) {
       this.git = simpleGit(this.workspaceRoot);
@@ -72,7 +72,7 @@ export class GitService {
     // Process staged files
     for (const file of status.staged) {
       const diff = await this.getFileDiff(file, true);
-      staged.push(this.createFileChange(file, diff, 'staged', status));
+      staged.push(this.createFileChange(file, diff, "staged", status));
     }
 
     // Process modified (unstaged) files
@@ -80,7 +80,7 @@ export class GitService {
       // Skip if already in staged (file can be partially staged)
       if (!status.staged.includes(file)) {
         const diff = await this.getFileDiff(file, false);
-        unstaged.push(this.createFileChange(file, diff, 'unstaged', status));
+        unstaged.push(this.createFileChange(file, diff, "unstaged", status));
       }
     }
 
@@ -88,8 +88,8 @@ export class GitService {
     for (const file of status.not_added) {
       untracked.push({
         path: file,
-        status: 'untracked',
-        diff: '', // Untracked files don't have a diff
+        status: "untracked",
+        diff: "", // Untracked files don't have a diff
         additions: 0,
         deletions: 0,
       });
@@ -109,16 +109,19 @@ export class GitService {
   /**
    * Get the diff for a specific file
    */
-  private async getFileDiff(filePath: string, staged: boolean): Promise<string> {
+  private async getFileDiff(
+    filePath: string,
+    staged: boolean,
+  ): Promise<string> {
     const git = this.ensureGit();
     try {
       if (staged) {
-        return await git.diff(['--cached', '--', filePath]);
+        return await git.diff(["--cached", "--", filePath]);
       } else {
-        return await git.diff(['--', filePath]);
+        return await git.diff(["--", filePath]);
       }
     } catch {
-      return '';
+      return "";
     }
   }
 
@@ -128,17 +131,17 @@ export class GitService {
   private createFileChange(
     filePath: string,
     diff: string,
-    _source: 'staged' | 'unstaged',
-    status: StatusResult
+    _source: "staged" | "unstaged",
+    status: StatusResult,
   ): FileChange {
-    let changeStatus: FileChange['status'] = 'modified';
+    let changeStatus: FileChange["status"] = "modified";
 
     if (status.created.includes(filePath)) {
-      changeStatus = 'added';
+      changeStatus = "added";
     } else if (status.deleted.includes(filePath)) {
-      changeStatus = 'deleted';
-    } else if (status.renamed.some(r => r.to === filePath)) {
-      changeStatus = 'renamed';
+      changeStatus = "deleted";
+    } else if (status.renamed.some((r) => r.to === filePath)) {
+      changeStatus = "renamed";
     }
 
     // Count additions and deletions from diff
@@ -154,7 +157,7 @@ export class GitService {
     };
 
     // Add original path for renamed files
-    const renamedEntry = status.renamed.find(r => r.to === filePath);
+    const renamedEntry = status.renamed.find((r) => r.to === filePath);
     if (renamedEntry) {
       fileChange.originalPath = renamedEntry.from;
     }
@@ -175,7 +178,7 @@ export class GitService {
    */
   async unstageFiles(paths: string[]): Promise<void> {
     const git = this.ensureGit();
-    await git.reset(['HEAD', ...paths]);
+    await git.reset(["HEAD", ...paths]);
   }
 
   /**
@@ -183,7 +186,7 @@ export class GitService {
    */
   async unstageAll(): Promise<void> {
     const git = this.ensureGit();
-    await git.reset(['HEAD']);
+    await git.reset(["HEAD"]);
   }
 
   /**

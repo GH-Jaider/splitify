@@ -1,4 +1,4 @@
-import { FileChangeInput } from './types';
+import { FileChangeInput } from "./types";
 
 /**
  * Maximum characters to include from a diff to avoid context overflow
@@ -17,10 +17,10 @@ export function buildChangesSection(changes: FileChangeInput[]): string {
   return changes
     .map((c) => {
       const truncatedDiff = c.diff.slice(0, MAX_DIFF_LENGTH);
-      const suffix = c.diff.length > MAX_DIFF_LENGTH ? '\n... (truncated)' : '';
+      const suffix = c.diff.length > MAX_DIFF_LENGTH ? "\n... (truncated)" : "";
       return `### File: ${c.path}\n\`\`\`diff\n${truncatedDiff}${suffix}\n\`\`\``;
     })
-    .join('\n\n');
+    .join("\n\n");
 }
 
 /**
