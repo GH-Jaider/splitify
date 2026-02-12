@@ -1,0 +1,40 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "plan": {
+      "mode": "primary",
+      "description": "Architecture, constraints, sequencing. Writes plan to .opencode/plan.md",
+      "prompt": "After completing a plan, save it to `.opencode/plan.md`. Ask for permission before writing.",
+      "permission": {
+        "edit": {
+          "*": "deny",
+          ".opencode/plan.md": "ask"
+        }
+      }
+    },
+    "execution": {
+      "mode": "primary",
+      "description": "Execute plans by orchestrating subagents"
+    },
+    "build": {
+      "mode": "primary",
+      "description": "Default development agent with full tool access"
+    },
+    "testing-strategy": {
+      "mode": "subagent",
+      "description": "Enforce testing philosophy, prevent low-value tests"
+    },
+    "test-runner": {
+      "mode": "subagent",
+      "description": "Execute tests efficiently and report results"
+    },
+    "review": {
+      "mode": "subagent",
+      "description": "Compare git diff against plan, identify risks and gaps"
+    },
+    "ask": {
+      "mode": "primary",
+      "description": "Answer questions about the project read-only"
+    }
+  }
+}

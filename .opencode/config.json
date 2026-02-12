@@ -1,0 +1,12 @@
+{
+  "$comment": "Model configuration for agents. Use null to use OpenCode's default model, or specify a model string like 'anthropic/claude-sonnet-4-20250514' or 'github-copilot/gpt-4o'.",
+  "models": {
+    "default": null,
+    "execution": null,
+    "coder": null,
+    "review": null,
+    "test-runner": null,
+    "testing-strategy": null,
+    "ask": null
+  }
+}
