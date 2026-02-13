@@ -8,7 +8,18 @@ suite("AIService Test Suite", () => {
   let mockCancellationToken: vscode.CancellationToken;
 
   setup(() => {
-    aiService = new AIService();
+    // Create a minimal mock ExtensionContext with globalState
+    const globalState = {
+      get: () => undefined,
+      update: () => Promise.resolve(),
+      keys: () => [],
+      setKeysForSync: () => {},
+    } as unknown as vscode.Memento & {
+      setKeysForSync(keys: readonly string[]): void;
+    };
+    const mockContext = { globalState } as unknown as vscode.ExtensionContext;
+
+    aiService = new AIService(mockContext);
     mockCancellationToken = new vscode.CancellationTokenSource().token;
   });
 
@@ -31,8 +42,8 @@ suite("AIService Test Suite", () => {
       );
       assert.ok(prompt.includes("diff"), "Prompt should mention diff format");
       assert.ok(
-        prompt.includes("conventional commit"),
-        "Prompt should mention conventional commits",
+        prompt.includes("clear, descriptive commit messages"),
+        "Prompt should include generic style instruction when no commits provided",
       );
     });
 
@@ -60,6 +71,39 @@ suite("AIService Test Suite", () => {
         prompt.includes("Changes to analyze"),
         "Prompt should still have structure",
       );
+    });
+
+    test("should include commit history in prompt when provided", () => {
+      const changes: FileChangeInput[] = [
+        { path: "file.ts", diff: "some diff" },
+      ];
+      const recentCommits = [
+        "feat(auth): add login endpoint",
+        "fix(ui): resolve button alignment",
+        "chore: update dependencies",
+        "feat(api): add pagination support",
+        "refactor(db): optimize query performance",
+      ];
+      const prompt = aiService.buildPrompt(changes, recentCommits);
+
+      // Should include the commit messages
+      assert.ok(prompt.includes("feat(auth): add login endpoint"));
+      assert.ok(prompt.includes("fix(ui): resolve button alignment"));
+      // Should NOT include hardcoded conventional commits
+      assert.ok(!prompt.includes("Follow conventional commit conventions"));
+    });
+
+    test("should use generic style when few commits available", () => {
+      const changes: FileChangeInput[] = [
+        { path: "file.ts", diff: "some diff" },
+      ];
+      const recentCommits = ["initial commit", "second commit"];
+      const prompt = aiService.buildPrompt(changes, recentCommits);
+
+      // Should use generic instruction
+      assert.ok(prompt.includes("clear, descriptive commit messages"));
+      // Should NOT include commit list
+      assert.ok(!prompt.includes("initial commit"));
     });
   });
 
@@ -176,6 +220,82 @@ suite("AIService Test Suite", () => {
         assert.ok(error instanceof Error);
         assert.ok((error as Error).message.includes("No changes"));
       }
+    });
+  });
+
+  suite("analyzeAndGroupChangesStreaming", () => {
+    test("should throw error for empty changes array", async () => {
+      const changes: FileChangeInput[] = [];
+
+      try {
+        await aiService.analyzeAndGroupChangesStreaming(
+          changes,
+          mockCancellationToken,
+        );
+        assert.fail("Should have thrown an error for empty changes");
+      } catch (error) {
+        assert.ok(error instanceof Error);
+        assert.ok((error as Error).message.includes("No changes"));
+      }
+    });
+  });
+
+  suite("extractCompleteGroups", () => {
+    test("should extract complete group objects from buffer", () => {
+      const buffer =
+        '{"groups": [{"name": "g1", "message": "feat: test", "files": ["a.ts"], "reasoning": "test"}, {"name": "g2", "message": "fix: bug", "files": ["b.ts"], "reasoning": "fix"}]}';
+      const groups = aiService.extractCompleteGroups(buffer);
+      assert.strictEqual(groups.length, 2);
+
+      const parsed1 = JSON.parse(groups[0]);
+      assert.strictEqual(parsed1.name, "g1");
+
+      const parsed2 = JSON.parse(groups[1]);
+      assert.strictEqual(parsed2.name, "g2");
+    });
+
+    test("should handle partial buffer (incomplete group)", () => {
+      const buffer =
+        '{"groups": [{"name": "g1", "message": "feat: test", "files": ["a.ts"], "reasoning": "test"}, {"name": "g2", "mess';
+      const groups = aiService.extractCompleteGroups(buffer);
+      assert.strictEqual(groups.length, 1); // Only the first complete group
+    });
+
+    test("should handle strings containing braces", () => {
+      const buffer =
+        '{"groups": [{"name": "g1", "message": "feat: add {thing}", "files": ["a.ts"], "reasoning": "has {braces}"}]}';
+      const groups = aiService.extractCompleteGroups(buffer);
+      assert.strictEqual(groups.length, 1);
+      const parsed = JSON.parse(groups[0]);
+      assert.strictEqual(parsed.message, "feat: add {thing}");
+    });
+
+    test("should return empty array when no groups array found", () => {
+      const buffer = "just some random text";
+      const groups = aiService.extractCompleteGroups(buffer);
+      assert.strictEqual(groups.length, 0);
+    });
+
+    test("should handle empty groups array", () => {
+      const buffer = '{"groups": []}';
+      const groups = aiService.extractCompleteGroups(buffer);
+      assert.strictEqual(groups.length, 0);
+    });
+
+    test("should handle nested objects in reasoning", () => {
+      const buffer =
+        '{"groups": [{"name": "g1", "message": "feat: test", "files": ["a.ts"], "reasoning": "reason with \\"escaped quotes\\""}]}';
+      const groups = aiService.extractCompleteGroups(buffer);
+      assert.strictEqual(groups.length, 1);
+      const parsed = JSON.parse(groups[0]);
+      assert.strictEqual(parsed.name, "g1");
+    });
+
+    test("should handle buffer with markdown code block prefix", () => {
+      const buffer =
+        '```json\n{"groups": [{"name": "g1", "message": "feat: test", "files": ["a.ts"], "reasoning": "test"}]}\n```';
+      const groups = aiService.extractCompleteGroups(buffer);
+      assert.strictEqual(groups.length, 1);
     });
   });
 });
