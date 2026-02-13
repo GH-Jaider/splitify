@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import type { IGroupingEngine, CommitGroup } from "../types";
+import { showGroupQuickPick } from "../ui/quickPick";
+import { extractGroupId } from "./utils";
 
 /**
  * Command: Edit a commit group's message
@@ -10,7 +12,7 @@ export function createEditGroupMessageCommand(
 ) {
   return vscode.commands.registerCommand(
     "splitify.editGroupMessage",
-    async (groupId?: string) => {
+    async (groupIdOrTreeItem?: string | { group?: { id?: string } }) => {
       const groupingEngine = getGroupingEngine();
 
       if (!groupingEngine) {
@@ -19,6 +21,9 @@ export function createEditGroupMessageCommand(
         );
         return;
       }
+
+      // Extract groupId from tree item if needed (inline buttons pass the tree item object)
+      let groupId = extractGroupId(groupIdOrTreeItem);
 
       // If no groupId provided, show a quick pick to select one
       if (!groupId) {
@@ -33,23 +38,16 @@ export function createEditGroupMessageCommand(
           return;
         }
 
-        const selected = await vscode.window.showQuickPick(
-          groups.map((g: CommitGroup) => ({
-            label: g.message,
-            description: `${g.files.length} file${g.files.length > 1 ? "s" : ""}`,
-            groupId: g.id,
-          })),
-          {
-            placeHolder: "Select a commit group to edit",
-            title: "Splitify: Edit Commit Message",
-          },
-        );
+        const selected = await showGroupQuickPick(groups, {
+          title: "Splitify: Edit Commit Message",
+          placeholder: "Select a commit group to edit",
+        });
 
         if (!selected) {
           return;
         }
 
-        groupId = selected.groupId;
+        groupId = selected.id;
       }
 
       const group = groupingEngine.groups.find(

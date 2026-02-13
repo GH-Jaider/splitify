@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import type { IGroupingEngine, CommitGroup } from "../types";
+import { showGroupQuickPick } from "../ui/quickPick";
+import { extractGroupId } from "./utils";
 
 /**
  * Command: Commit a specific group
@@ -10,7 +12,7 @@ export function createCommitGroupCommand(
 ) {
   return vscode.commands.registerCommand(
     "splitify.commitGroup",
-    async (groupId?: string) => {
+    async (groupIdOrTreeItem?: string | { group?: { id?: string } }) => {
       const groupingEngine = getGroupingEngine();
 
       if (!groupingEngine) {
@@ -19,6 +21,9 @@ export function createCommitGroupCommand(
         );
         return;
       }
+
+      // Extract groupId from tree item if needed (inline buttons pass the tree item object)
+      let groupId = extractGroupId(groupIdOrTreeItem);
 
       // If no groupId provided, show a quick pick to select one
       if (!groupId) {
@@ -33,24 +38,16 @@ export function createCommitGroupCommand(
           return;
         }
 
-        const selected = await vscode.window.showQuickPick(
-          groups.map((g: CommitGroup) => ({
-            label: g.message,
-            description: `${g.files.length} file${g.files.length > 1 ? "s" : ""}`,
-            detail: g.reasoning,
-            groupId: g.id,
-          })),
-          {
-            placeHolder: "Select a commit group to commit",
-            title: "Splitify: Commit Group",
-          },
-        );
+        const selected = await showGroupQuickPick(groups, {
+          title: "Splitify: Commit Group",
+          placeholder: "Select a commit group to commit",
+        });
 
         if (!selected) {
           return;
         }
 
-        groupId = selected.groupId;
+        groupId = selected.id;
       }
 
       const group = groupingEngine.groups.find(
@@ -69,6 +66,13 @@ export function createCommitGroupCommand(
           vscode.window.showInformationMessage(
             `Splitify: Committed "${group.message}"`,
           );
+        }
+
+        // Refresh VS Code's built-in Git extension to reflect the commit
+        try {
+          await vscode.commands.executeCommand("git.refresh");
+        } catch {
+          /* Git extension not available */
         }
 
         // Update context if no more groups

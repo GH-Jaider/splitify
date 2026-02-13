@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import type { IGroupingEngine, CommitGroup } from "../types";
+import { showCommitConfirmation } from "../ui/quickPick";
 
 /**
  * Command: Commit all pending groups
- * Iterates through all groups and commits them sequentially
+ * Delegates to commitAllGroups() which handles pre-commit hook strategies
  */
 export function createCommitAllCommand(
   getGroupingEngine: () => IGroupingEngine | undefined,
@@ -30,13 +31,8 @@ export function createCommitAllCommand(
     }
 
     // Confirm before committing all
-    const confirm = await vscode.window.showWarningMessage(
-      `Splitify: Commit ${pendingGroups.length} group${pendingGroups.length > 1 ? "s" : ""}?`,
-      { modal: true },
-      "Commit All",
-    );
-
-    if (confirm !== "Commit All") {
+    const confirmed = await showCommitConfirmation(pendingGroups);
+    if (!confirmed) {
       return;
     }
 
@@ -44,36 +40,52 @@ export function createCommitAllCommand(
       {
         location: vscode.ProgressLocation.Notification,
         title: "Splitify: Committing groups...",
-        cancellable: false,
+        cancellable: true,
       },
-      async (progress) => {
+      async (progress, token) => {
         try {
-          const total = pendingGroups.length;
-          let current = 0;
-
-          for (const group of pendingGroups) {
-            current++;
-            progress.report({
-              message: `(${current}/${total}) ${group.message}`,
-              increment: (1 / total) * 100,
-            });
-
-            await groupingEngine.commitGroup(group.id);
-          }
+          const result = await groupingEngine.commitAllGroups({
+            token,
+            onProgress: (committed, total, group) => {
+              progress.report({
+                message: `(${committed + 1}/${total}) ${group.message}`,
+                increment: (1 / total) * 100,
+              });
+            },
+          });
 
           const config = vscode.workspace.getConfiguration("splitify");
           if (config.get<boolean>("showNotifications", true)) {
-            vscode.window.showInformationMessage(
-              `Splitify: Successfully committed ${total} group${total > 1 ? "s" : ""}`,
-            );
+            if (result.cancelled > 0) {
+              vscode.window.showInformationMessage(
+                `Splitify: Committed ${result.success} of ${result.success + result.cancelled} group${result.success + result.cancelled > 1 ? "s" : ""} (cancelled)`,
+              );
+            } else {
+              vscode.window.showInformationMessage(
+                `Splitify: Successfully committed ${result.success} group${result.success > 1 ? "s" : ""}`,
+              );
+            }
           }
 
-          // Clear the groups view
-          await vscode.commands.executeCommand(
-            "setContext",
-            "splitify.hasGroups",
-            false,
-          );
+          // Refresh VS Code's built-in Git extension to reflect commits
+          try {
+            await vscode.commands.executeCommand("git.refresh");
+          } catch {
+            /* Git extension not available */
+          }
+
+          // Update context: check if there are still pending groups
+          if (
+            groupingEngine.groups.filter(
+              (g: CommitGroup) => g.status === "pending",
+            ).length === 0
+          ) {
+            await vscode.commands.executeCommand(
+              "setContext",
+              "splitify.hasGroups",
+              false,
+            );
+          }
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Unknown error";
