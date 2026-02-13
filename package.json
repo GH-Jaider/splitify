@@ -242,14 +242,17 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "vscode-test",
     "test:unit": "vscode-test --label unit",
-    "test:integration": "vscode-test --label integration"
+    "test:integration": "vscode-test --label integration",
+    "marketplace:package": "pnpm vsce package --no-dependencies",
+    "marketplace:publish": "pnpm vsce publish --no-dependencies"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "@types/vscode": "^1.107.0",
+    "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.1",
     "eslint": "^9.39.1",
     "prettier": "^3.7.4",
     "ts-loader": "^9.5.4",
