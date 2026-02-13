@@ -31,6 +31,8 @@ export interface CommitAllResult {
   success: number;
   /** Number of groups that failed to commit */
   failed: number;
+  /** Number of groups that were cancelled before committing */
+  cancelled: number;
 }
 
 /**
