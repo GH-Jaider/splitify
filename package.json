@@ -60,6 +60,42 @@
         "title": "Refresh Analysis",
         "icon": "$(refresh)",
         "category": "Splitify"
+      },
+      {
+        "command": "splitify.commitSelected",
+        "title": "Commit Selected Groups",
+        "icon": "$(checklist)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.moveFile",
+        "title": "Move to Another Group",
+        "icon": "$(move)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.removeFile",
+        "title": "Remove from Group",
+        "icon": "$(remove)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.createGroup",
+        "title": "Create New Group",
+        "icon": "$(add)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.addFileToGroup",
+        "title": "Add to Group",
+        "icon": "$(add)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.selectModel",
+        "title": "Select AI Model",
+        "icon": "$(hubot)",
+        "category": "Splitify"
       }
     ],
     "menus": {
@@ -82,7 +118,17 @@
           "group": "navigation"
         },
         {
+          "command": "splitify.createGroup",
+          "when": "view == splitify.groupsView",
+          "group": "navigation"
+        },
+        {
           "command": "splitify.commitAll",
+          "when": "view == splitify.groupsView && splitify.hasGroups",
+          "group": "navigation"
+        },
+        {
+          "command": "splitify.commitSelected",
           "when": "view == splitify.groupsView && splitify.hasGroups",
           "group": "navigation"
         }
@@ -102,6 +148,21 @@
           "command": "splitify.discardGroup",
           "when": "view == splitify.groupsView && viewItem == commitGroup",
           "group": "inline@3"
+        },
+        {
+          "command": "splitify.moveFile",
+          "when": "view == splitify.groupsView && viewItem == groupFile",
+          "group": "inline@1"
+        },
+        {
+          "command": "splitify.removeFile",
+          "when": "view == splitify.groupsView && viewItem == groupFile",
+          "group": "inline@2"
+        },
+        {
+          "command": "splitify.addFileToGroup",
+          "when": "view == splitify.groupsView && viewItem == ungroupedFile",
+          "group": "inline@1"
         }
       ]
     },
@@ -119,33 +180,48 @@
     "configuration": {
       "title": "Splitify",
       "properties": {
-        "splitify.commitStyle": {
-          "type": "string",
-          "enum": [
-            "conventional",
-            "simple",
-            "emoji"
-          ],
-          "default": "conventional",
-          "description": "Style for generated commit messages"
-        },
         "splitify.maxFilesPerGroup": {
           "type": "number",
           "default": 10,
           "description": "Maximum files to include in a single commit group"
         },
-        "splitify.autoStage": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically stage files when committing a group"
-        },
         "splitify.showNotifications": {
           "type": "boolean",
           "default": true,
           "description": "Show notifications after commits"
+        },
+        "splitify.preCommitStrategy": {
+          "type": "string",
+          "enum": [
+            "run-once",
+            "run-per-group",
+            "skip"
+          ],
+          "enumDescriptions": [
+            "Run pre-commit hooks once for all files before committing groups (recommended)",
+            "Run pre-commit hooks on each individual group commit (slower but thorough)",
+            "Skip all pre-commit hooks when committing groups"
+          ],
+          "default": "run-once",
+          "description": "How to handle pre-commit hooks when committing groups"
+        },
+        "splitify.ignorePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns for files to exclude from Splitify analysis (e.g., ['*.lock', 'dist/**'])"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "splitify.selectModel",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",
@@ -177,6 +253,7 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
+    "minimatch": "^10.2.0",
     "simple-git": "^3.30.0"
   }
 }

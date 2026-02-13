@@ -38,6 +38,7 @@ suite("Extension Integration Test Suite", () => {
         "splitify.discardGroup",
         "splitify.editGroupMessage",
         "splitify.refresh",
+        "splitify.selectModel",
       ];
 
       for (const cmd of expectedCommands) {
