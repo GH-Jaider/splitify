@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="images/icon.png" alt="Splitify Logo" width="256" />
-</p>
-
 # Splitify
 
 **Turn your "WIP" chaos into distinct, atomic commits.**
