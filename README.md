@@ -91,12 +91,3 @@ Some things just don't need AI analysis. Exclude lock files or build artifacts t
 
 - **Context Limits:** If you have 50+ modified files with massive diffs, the AI context window might get full. Splitify may truncate the input. If you've changed that much code without committing, consider this a gentle warning to commit more often.
 - **Subscription Check:** You must have Copilot. If the model list is empty, check your wallet (or your organization's permissions).
-
-## Release Notes
-
-### 0.0.1
-
-- Initial release.
-- Added drag-and-drop because we know you'll need to fix the sorting.
-- Implemented "Mimicry" to hide the AI's involvement.
-- Added `ignorePatterns` so we don't try to analyze 40,000 lines of `yarn.lock`.
