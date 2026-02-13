@@ -3,8 +3,13 @@
   "displayName": "Splitify",
   "description": "Turn messy, uncommitted changes into clean, atomic commits. Analyzes your local modifications, groups them by intent using Copilot AI, and suggests meaningful commit messages.",
   "version": "0.0.1",
-  "publisher": "splitify",
+  "publisher": "Oktuvida",
   "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GH-Jaider/splitify.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
