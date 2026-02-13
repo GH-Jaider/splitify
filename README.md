@@ -1,71 +1,113 @@
-# splitify README
+# Splitify
 
-This is the README for your extension "splitify". After writing up a brief description, we recommend including the following sections.
+**Turn messy, uncommitted changes into clean, atomic commits.**
+
+AI-assisted coding tools have changed the way we work. A single session with Copilot can touch dozens of files across multiple concerns -- a new feature, a refactor, a bug fix, and a config tweak, all mixed together in your working tree. The result? Developers commit everything as one giant blob, and the commit history becomes unreadable.
+
+Splitify fixes this. It analyzes your uncommitted changes using GitHub Copilot, groups related files by intent, suggests meaningful commit messages that match your project's style, and lets you commit each group independently -- all without leaving VS Code.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### Analyze & Group Changes
 
-For example if there is an image subfolder under your extension project workspace:
+Run **Splitify: Analyze & Group Changes** from the Command Palette or the SCM title bar. Splitify reads your diffs, sends them to your chosen AI model, and organizes files into logical, atomic commit groups -- each with a suggested commit message.
 
-\!\[feature X\]\(images/feature-x.png\)
+<!-- ![Analyze changes](images/analyze.png) -->
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+### Commit Groups View
+
+After analysis, a **Splitify - Commit Groups** tree view appears in the Source Control panel. Each group shows its commit message and the files it contains. From here you can:
+
+- **Commit** a single group or all groups at once
+- **Select groups with checkboxes** and commit only the selected ones
+- **Edit** the suggested commit message before committing
+- **Discard** groups you don't want
+- **Drag and drop** files between groups to reorganize
+- **Move** or **remove** individual files from groups
+- **Create** new groups manually and add ungrouped files to them
+
+### Ungrouped Files
+
+If the AI misses a file or you remove one from a group, it appears in an **Ungrouped Files** section at the bottom of the tree view. You can add these files to any existing group with one click.
+
+### Commit Message Style Matching
+
+Splitify reads your recent commit history and instructs the AI to match your project's existing commit message format, prefix style, and tone. The result is commit messages that look like yours, not generic AI output.
+
+### Configurable AI Model
+
+By default Splitify uses `gpt-4o` through GitHub Copilot's language model API. You can switch to any available model:
+
+- Run **Splitify: Select AI Model** from the Command Palette (or press `Ctrl+Alt+M` / `Cmd+Alt+M`)
+- Pick from a list of all models available through your Copilot subscription
+- Your choice is remembered across sessions
+
+### Pre-Commit Hook Strategies
+
+Splitify respects your pre-commit hooks with three strategies:
+
+| Strategy             | Behavior                                                         |
+| -------------------- | ---------------------------------------------------------------- |
+| `run-once` (default) | Runs hooks once for all files before committing groups           |
+| `run-per-group`      | Runs hooks on each individual group commit (slower but thorough) |
+| `skip`               | Skips all pre-commit hooks                                       |
+
+### Ignore Patterns
+
+Exclude files from analysis using glob patterns. Useful for lock files, build artifacts, or anything you don't want Splitify to consider:
+
+```json
+"splitify.ignorePatterns": ["*.lock", "dist/**", "*.min.js"]
+```
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- **VS Code** 1.85 or later
+- **GitHub Copilot** extension (Splitify uses Copilot's language model API -- a Copilot subscription is required)
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+| Setting                      | Default    | Description                                                          |
+| ---------------------------- | ---------- | -------------------------------------------------------------------- |
+| `splitify.maxFilesPerGroup`  | `10`       | Maximum files to include in a single commit group                    |
+| `splitify.showNotifications` | `true`     | Show notifications after commits                                     |
+| `splitify.preCommitStrategy` | `run-once` | How to handle pre-commit hooks (`run-once`, `run-per-group`, `skip`) |
+| `splitify.ignorePatterns`    | `[]`       | Glob patterns for files to exclude from analysis                     |
 
-For example:
+## Commands
 
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+| Command                           | Description                                          | Keybinding   |
+| --------------------------------- | ---------------------------------------------------- | ------------ |
+| Splitify: Analyze & Group Changes | Analyze uncommitted changes and create commit groups | --           |
+| Splitify: Commit This Group       | Commit a single group                                | --           |
+| Splitify: Commit All Groups       | Commit all groups sequentially                       | --           |
+| Splitify: Commit Selected Groups  | Commit only the checked groups                       | --           |
+| Splitify: Edit Commit Message     | Edit a group's commit message                        | --           |
+| Splitify: Discard Group           | Remove a group                                       | --           |
+| Splitify: Move to Another Group   | Move a file to a different group                     | --           |
+| Splitify: Remove from Group       | Remove a file from its group                         | --           |
+| Splitify: Create New Group        | Create an empty group manually                       | --           |
+| Splitify: Add to Group            | Add an ungrouped file to an existing group           | --           |
+| Splitify: Refresh Analysis        | Re-run analysis on current changes                   | --           |
+| Splitify: Select AI Model         | Choose which AI model to use                         | `Ctrl+Alt+M` |
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- Very large changesets (50+ files with long diffs) may be truncated to fit within the model's context window. Consider committing in smaller batches.
+- The extension requires an active GitHub Copilot subscription. Without one, model selection will show no available models.
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
+Initial release:
 
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+- AI-powered change analysis and grouping
+- Tree view with inline actions for commit, edit, and discard
+- Checkbox selection for batch committing
+- Drag-and-drop file reorganization between groups
+- Ungrouped files tracking and management
+- Configurable AI model selection
+- Pre-commit hook strategies
+- Commit message style matching from repository history
+- File ignore patterns
