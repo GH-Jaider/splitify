@@ -4,7 +4,7 @@
   "description": "Turn messy, uncommitted changes into clean, atomic commits. Analyzes your local modifications, groups them by intent using Copilot AI, and suggests meaningful commit messages.",
   "version": "0.0.1",
   "publisher": "Oktuvida",
-  "icon": "icon.png",
+  "icon": "images/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
