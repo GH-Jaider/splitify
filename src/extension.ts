@@ -1,9 +1,14 @@
 import * as vscode from "vscode";
 import { registerCommands } from "./commands";
-import { CommitGroupsTreeProvider } from "./views";
+import {
+  CommitGroupsTreeProvider,
+  CommitGroupTreeItem,
+  CommitGroupsDragAndDropController,
+} from "./views";
 import { GroupingEngine } from "./services/grouping";
 import { GitService } from "./services/git";
 import { AIService } from "./services/ai";
+import { IgnoreService } from "./services/ignore";
 import type { IGroupingEngine } from "./types";
 
 // Global instances
@@ -21,26 +26,48 @@ function getGroupingEngine(): IGroupingEngine | undefined {
 /**
  * Called when the extension is activated
  */
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   console.log("Splitify is activating...");
 
   // Initialize services
   gitService = new GitService();
-  aiService = new AIService();
-  groupingEngine = new GroupingEngine(gitService, aiService);
-
-  // Register all commands
-  registerCommands(context, getGroupingEngine);
+  aiService = new AIService(context);
+  const ignoreService = await IgnoreService.loadFromWorkspace();
+  groupingEngine = new GroupingEngine(gitService, aiService, ignoreService);
 
   // Create and register the tree view provider
   const treeProvider = new CommitGroupsTreeProvider();
   treeProvider.setGroupingEngine(groupingEngine);
 
+  // Register all commands (after treeProvider is created so commitSelected can use checkboxes)
+  registerCommands(context, getGroupingEngine, treeProvider);
+
+  // Create drag-and-drop controller
+  const dragAndDropController = new CommitGroupsDragAndDropController(
+    getGroupingEngine,
+  );
+
   const treeView = vscode.window.createTreeView("splitify.groupsView", {
     treeDataProvider: treeProvider,
     showCollapseAll: true,
+    manageCheckboxStateManually: true,
+    dragAndDropController,
   });
   context.subscriptions.push(treeView);
+
+  // Subscribe to checkbox state changes
+  context.subscriptions.push(
+    treeView.onDidChangeCheckboxState((event) => {
+      for (const [item, state] of event.items) {
+        if (item instanceof CommitGroupTreeItem) {
+          treeProvider.setCheckboxState(
+            item.group.id,
+            state === vscode.TreeItemCheckboxState.Checked,
+          );
+        }
+      }
+    }),
+  );
 
   // Initialize context values
   vscode.commands.executeCommand("setContext", "splitify.hasGroups", false);
