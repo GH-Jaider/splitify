@@ -1,113 +1,102 @@
 # Splitify
 
-**Turn messy, uncommitted changes into clean, atomic commits.**
+**Turn your "WIP" chaos into distinct, atomic commits.**
 
-AI-assisted coding tools have changed the way we work. A single session with Copilot can touch dozens of files across multiple concerns -- a new feature, a refactor, a bug fix, and a config tweak, all mixed together in your working tree. The result? Developers commit everything as one giant blob, and the commit history becomes unreadable.
+AI coding tools are a double-edged sword. You spend two hours in a flow state with GitHub Copilot, and suddenly you have touched 40 files across three different architectural layers. You have a new feature, a refactor, a bug fix, and a typo correction all sitting in your working tree.
 
-Splitify fixes this. It analyzes your uncommitted changes using GitHub Copilot, groups related files by intent, suggests meaningful commit messages that match your project's style, and lets you commit each group independently -- all without leaving VS Code.
+Usually, you’d sigh, `git add .`, and commit it all as *"updates"* (we know you do it).
+
+**Splitify** is the intervention you need. It analyzes your uncommitted mess using GitHub Copilot directly from VS Code, logically groups files by intent, and generates commit messages that match your project's style. It makes you look organized, even if you aren't.
 
 ## Features
 
 ### Analyze & Group Changes
 
-Run **Splitify: Analyze & Group Changes** from the Command Palette or the SCM title bar. Splitify reads your diffs, sends them to your chosen AI model, and organizes files into logical, atomic commit groups -- each with a suggested commit message.
-
-<!-- ![Analyze changes](images/analyze.png) -->
+Run **Splitify: Analyze & Group Changes** from the Command Palette. We send your diffs to the AI, which attempts to untangle your spaghetti code into logical, atomic groups. It’s like `git add --patch`, but for people who value their sanity.
 
 ### Commit Groups View
 
-After analysis, a **Splitify - Commit Groups** tree view appears in the Source Control panel. Each group shows its commit message and the files it contains. From here you can:
+Once the AI has done the heavy lifting, a **Splitify - Commit Groups** tree appears in your Source Control panel. This is your staging ground.
 
-- **Commit** a single group or all groups at once
-- **Select groups with checkboxes** and commit only the selected ones
-- **Edit** the suggested commit message before committing
-- **Discard** groups you don't want
-- **Drag and drop** files between groups to reorganize
-- **Move** or **remove** individual files from groups
-- **Create** new groups manually and add ungrouped files to them
+* **Review:** See the files and the proposed commit message.
+* **Cherry-pick:** Check the boxes to commit specific groups now, and leave others for later.
+* **Edit:** If the AI hallucinates a commit message, you can edit it inline.
+* **Reorganize:** Drag and drop files between groups. Sometimes the robot gets it wrong; you’re still the boss.
+* **Commit:** Fire off a single group or batch commit everything sequentially.
 
 ### Ungrouped Files
 
-If the AI misses a file or you remove one from a group, it appears in an **Ungrouped Files** section at the bottom of the tree view. You can add these files to any existing group with one click.
+If the AI encounters a file it doesn't understand (or if you manually kick a file out of a group), it lands in the **Ungrouped Files** section. Think of this as the "Island of Misfit Changes." You can drag them into a valid group with one click.
 
-### Commit Message Style Matching
+### Commit Message Mimicry
 
-Splitify reads your recent commit history and instructs the AI to match your project's existing commit message format, prefix style, and tone. The result is commit messages that look like yours, not generic AI output.
+Splitify reads your recent git history to understand your commit style. Does your team use Conventional Commits? Do you use emojis? Do you write novels in the description? Splitify instructs the AI to match your existing style so your teammates don't suspect a robot is doing your work.
 
 ### Configurable AI Model
 
-By default Splitify uses `gpt-4o` through GitHub Copilot's language model API. You can switch to any available model:
+By default, we use `gpt-4o` via the Copilot API. If you have a preference (or a specific subscription tier), you can swap the brain.
 
-- Run **Splitify: Select AI Model** from the Command Palette (or press `Ctrl+Alt+M` / `Cmd+Alt+M`)
-- Pick from a list of all models available through your Copilot subscription
-- Your choice is remembered across sessions
+* Run **Splitify: Select AI Model** (`Ctrl+Alt+M` / `Cmd+Alt+M`).
+* Your choice persists across sessions.
 
 ### Pre-Commit Hook Strategies
 
-Splitify respects your pre-commit hooks with three strategies:
+Pre-commit hooks are great until they run 10 times in a row. Splitify lets you choose how much pain you want to endure:
 
-| Strategy             | Behavior                                                         |
-| -------------------- | ---------------------------------------------------------------- |
-| `run-once` (default) | Runs hooks once for all files before committing groups           |
-| `run-per-group`      | Runs hooks on each individual group commit (slower but thorough) |
-| `skip`               | Skips all pre-commit hooks                                       |
+| Strategy | Behavior |
+| --- | --- |
+| `run-once` | **Default.** Runs hooks once for all files before starting the commit chain. Fast and sensible. |
+| `run-per-group` | Runs hooks before *every* individual group commit. Slower, but purist-approved. |
+| `skip` | YOLO. Skips all hooks. |
 
 ### Ignore Patterns
 
-Exclude files from analysis using glob patterns. Useful for lock files, build artifacts, or anything you don't want Splitify to consider:
+Some things just don't need AI analysis. Exclude lock files or build artifacts to save tokens and context window space:
 
 ```json
-"splitify.ignorePatterns": ["*.lock", "dist/**", "*.min.js"]
+"splitify.ignorePatterns": ["*.lock", "dist/**", "package-lock.json"]
+
 ```
 
 ## Requirements
 
-- **VS Code** 1.85 or later
-- **GitHub Copilot** extension (Splitify uses Copilot's language model API -- a Copilot subscription is required)
+* **VS Code** 1.85+
+* **GitHub Copilot Extension:** We piggyback off the Copilot Language Model API. You need an active subscription.
 
 ## Extension Settings
 
-| Setting                      | Default    | Description                                                          |
-| ---------------------------- | ---------- | -------------------------------------------------------------------- |
-| `splitify.maxFilesPerGroup`  | `10`       | Maximum files to include in a single commit group                    |
-| `splitify.showNotifications` | `true`     | Show notifications after commits                                     |
-| `splitify.preCommitStrategy` | `run-once` | How to handle pre-commit hooks (`run-once`, `run-per-group`, `skip`) |
-| `splitify.ignorePatterns`    | `[]`       | Glob patterns for files to exclude from analysis                     |
+| Setting | Default | Description |
+| --- | --- | --- |
+| `splitify.maxFilesPerGroup` | `10` | The cap on how big a single commit should be. |
+| `splitify.showNotifications` | `true` | We'll tell you when the commits are done. |
+| `splitify.preCommitStrategy` | `run-once` | `run-once`, `run-per-group`, or `skip`. |
+| `splitify.ignorePatterns` | `[]` | Glob patterns to hide from the AI. |
 
 ## Commands
 
-| Command                           | Description                                          | Keybinding   |
-| --------------------------------- | ---------------------------------------------------- | ------------ |
-| Splitify: Analyze & Group Changes | Analyze uncommitted changes and create commit groups | --           |
-| Splitify: Commit This Group       | Commit a single group                                | --           |
-| Splitify: Commit All Groups       | Commit all groups sequentially                       | --           |
-| Splitify: Commit Selected Groups  | Commit only the checked groups                       | --           |
-| Splitify: Edit Commit Message     | Edit a group's commit message                        | --           |
-| Splitify: Discard Group           | Remove a group                                       | --           |
-| Splitify: Move to Another Group   | Move a file to a different group                     | --           |
-| Splitify: Remove from Group       | Remove a file from its group                         | --           |
-| Splitify: Create New Group        | Create an empty group manually                       | --           |
-| Splitify: Add to Group            | Add an ungrouped file to an existing group           | --           |
-| Splitify: Refresh Analysis        | Re-run analysis on current changes                   | --           |
-| Splitify: Select AI Model         | Choose which AI model to use                         | `Ctrl+Alt+M` |
+| Command | Description | Keybinding |
+| --- | --- | --- |
+| **Splitify: Analyze & Group Changes** | The "Fix My Mess" button. | -- |
+| **Splitify: Commit This Group** | Commit just the focused group. | -- |
+| **Splitify: Commit All Groups** | Commit everything in the list, one by one. | -- |
+| **Splitify: Commit Selected Groups** | Commit only what you've checked. | -- |
+| **Splitify: Edit Commit Message** | Fix the AI's copywriting. | -- |
+| **Splitify: Discard Group** | Delete the grouping (not the file changes). | -- |
+| **Splitify: Move/Remove** | Context menu items to move files around. | -- |
+| **Splitify: Create New Group** | Manually make an empty group. | -- |
+| **Splitify: Refresh Analysis** | Re-roll the dice on the current changes. | -- |
+| **Splitify: Select AI Model** | Switch between available Copilot models. | `Ctrl+Alt+M` |
 
 ## Known Issues
 
-- Very large changesets (50+ files with long diffs) may be truncated to fit within the model's context window. Consider committing in smaller batches.
-- The extension requires an active GitHub Copilot subscription. Without one, model selection will show no available models.
+* **Context Limits:** If you have 50+ modified files with massive diffs, the AI context window might get full. Splitify may truncate the input. If you've changed that much code without committing, consider this a gentle warning to commit more often.
+* **Subscription Check:** You must have Copilot. If the model list is empty, check your wallet (or your organization's permissions).
 
 ## Release Notes
 
 ### 0.0.1
 
-Initial release:
-
-- AI-powered change analysis and grouping
-- Tree view with inline actions for commit, edit, and discard
-- Checkbox selection for batch committing
-- Drag-and-drop file reorganization between groups
-- Ungrouped files tracking and management
-- Configurable AI model selection
-- Pre-commit hook strategies
-- Commit message style matching from repository history
-- File ignore patterns
+* Initial release.
+* Added drag-and-drop because we know you'll need to fix the sorting.
+* Implemented "Mimicry" to hide the AI's involvement.
+* Added `ignorePatterns` so we don't try to analyze 40,000 lines of `yarn.lock`.
