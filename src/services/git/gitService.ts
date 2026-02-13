@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
-import simpleGit, { SimpleGit, StatusResult } from "simple-git";
+import * as path from "path";
+import * as fs from "fs/promises";
+import { constants as fsConstants } from "node:fs";
+import simpleGit, { Options, SimpleGit, StatusResult } from "simple-git";
 import { FileChange, ChangesSummary } from "./types";
 
 /**
@@ -192,22 +195,102 @@ export class GitService {
   /**
    * Create a commit with the currently staged files
    */
-  async commit(message: string): Promise<string> {
+  async commit(message: string, noVerify: boolean = false): Promise<string> {
     const git = this.ensureGit();
-    const result = await git.commit(message);
+    const options: Options = noVerify ? { "--no-verify": null } : {};
+    const result = await git.commit(message, undefined, options);
     return result.commit;
   }
 
   /**
-   * Stage specific files and commit them with a message
+   * Commit specific files with a message.
+   * Stages the specified files then uses git's --only behavior to commit
+   * only those files without disturbing other staged files.
    */
-  async stageAndCommit(paths: string[], message: string): Promise<string> {
-    // First unstage everything to ensure clean state
-    await this.unstageAll();
-    // Stage only the files we want
-    await this.stageFiles(paths);
-    // Commit
-    return this.commit(message);
+  async stageAndCommit(
+    paths: string[],
+    message: string,
+    noVerify: boolean = false,
+  ): Promise<string> {
+    const git = this.ensureGit();
+    // Stage the files first so untracked files become known to git
+    await git.add(paths);
+    const options: Options = noVerify ? { "--no-verify": null } : {};
+    const result = await git.commit(message, paths, options);
+    return result.commit;
+  }
+
+  /**
+   * Get recent commit messages from the repository
+   * Used to infer commit style preferences
+   *
+   * @param count - Number of recent commits to retrieve (default 20)
+   * @returns Array of commit message strings
+   */
+  async getRecentCommitMessages(count: number = 20): Promise<string[]> {
+    const git = this.ensureGit();
+    try {
+      const log = await git.log({ maxCount: count });
+      return log.all.map((entry) => entry.message);
+    } catch {
+      // Return empty array if log fails (e.g., no commits yet)
+      return [];
+    }
+  }
+
+  /**
+   * Check if a pre-commit hook is configured
+   * Checks both standard .git/hooks/pre-commit and core.hooksPath
+   */
+  async hasPreCommitHook(): Promise<boolean> {
+    const git = this.ensureGit();
+    try {
+      // Check if core.hooksPath is configured (e.g., husky)
+      let hooksPath: string;
+      try {
+        const configResult = await git.raw([
+          "config",
+          "--get",
+          "core.hooksPath",
+        ]);
+        const trimmed = configResult.trim();
+        if (trimmed) {
+          hooksPath = path.join(this.workspaceRoot!, trimmed, "pre-commit");
+        } else {
+          hooksPath = path.join(
+            this.workspaceRoot!,
+            ".git",
+            "hooks",
+            "pre-commit",
+          );
+        }
+      } catch {
+        // No core.hooksPath configured, use default
+        hooksPath = path.join(
+          this.workspaceRoot!,
+          ".git",
+          "hooks",
+          "pre-commit",
+        );
+      }
+
+      // Check if the hook file exists and is executable
+      await fs.access(hooksPath, fsConstants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Run the pre-commit hook against currently staged files
+   * Uses `git hook run` (requires git 2.36+)
+   *
+   * @throws Error if the hook rejects the commit
+   */
+  async runPreCommitHook(): Promise<void> {
+    const git = this.ensureGit();
+    await git.raw(["hook", "run", "--ignore-missing", "pre-commit"]);
   }
 
   /**

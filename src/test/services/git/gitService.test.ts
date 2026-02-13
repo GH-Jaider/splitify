@@ -280,7 +280,7 @@ suite("GitService Test Suite", () => {
   });
 
   suite("stageAndCommit", () => {
-    test("should stage specific files and commit them", async () => {
+    test("should commit specific files with the correct message", async () => {
       // Create multiple files
       const file1 = path.join(testDir, "sc1.ts");
       const file2 = path.join(testDir, "sc2.ts");
@@ -305,6 +305,125 @@ suite("GitService Test Suite", () => {
         status.not_added.includes("sc2.ts"),
         "sc2.ts should still be untracked",
       );
+    });
+
+    test("should preserve staging state of other files", async () => {
+      // Create multiple files
+      const fileA = path.join(testDir, "fileA.ts");
+      const fileB = path.join(testDir, "fileB.ts");
+      const fileC = path.join(testDir, "fileC.ts");
+      fs.writeFileSync(fileA, "content A");
+      fs.writeFileSync(fileB, "content B");
+      fs.writeFileSync(fileC, "content C");
+
+      // Stage fileA manually
+      await git.add("fileA.ts");
+
+      // Verify fileA is staged before commit
+      const statusBefore = await git.status();
+      assert.ok(
+        statusBefore.staged.includes("fileA.ts"),
+        "fileA.ts should be staged before stageAndCommit",
+      );
+
+      // Commit only fileB via stageAndCommit
+      const gitService = new GitService(mockWorkspaceProvider);
+      const commitHash = await gitService.stageAndCommit(
+        ["fileB.ts"],
+        "feat: add fileB only",
+      );
+
+      assert.ok(commitHash, "Should return commit hash");
+
+      // Verify fileB was committed
+      const log = await git.log({ maxCount: 1 });
+      assert.strictEqual(log.latest?.message, "feat: add fileB only");
+
+      // fileA should STILL be staged (staging state preserved)
+      const statusAfter = await git.status();
+      assert.ok(
+        statusAfter.staged.includes("fileA.ts"),
+        "fileA.ts should still be staged after stageAndCommit",
+      );
+
+      // fileC should still be untracked
+      assert.ok(
+        statusAfter.not_added.includes("fileC.ts"),
+        "fileC.ts should still be untracked",
+      );
+    });
+
+    test("should commit multiple files at once", async () => {
+      const file1 = path.join(testDir, "multi-sc1.ts");
+      const file2 = path.join(testDir, "multi-sc2.ts");
+      fs.writeFileSync(file1, "content 1");
+      fs.writeFileSync(file2, "content 2");
+
+      const gitService = new GitService(mockWorkspaceProvider);
+      const commitHash = await gitService.stageAndCommit(
+        ["multi-sc1.ts", "multi-sc2.ts"],
+        "feat: add both files",
+      );
+
+      assert.ok(commitHash, "Should return commit hash");
+
+      // Verify both files were committed
+      const log = await git.log({ maxCount: 1 });
+      assert.strictEqual(log.latest?.message, "feat: add both files");
+
+      // Both files should no longer be untracked
+      const status = await git.status();
+      assert.ok(
+        !status.not_added.includes("multi-sc1.ts"),
+        "multi-sc1.ts should have been committed",
+      );
+      assert.ok(
+        !status.not_added.includes("multi-sc2.ts"),
+        "multi-sc2.ts should have been committed",
+      );
+    });
+
+    test("should commit multiple groups sequentially with correct files", async () => {
+      // Create files for multiple groups
+      fs.writeFileSync(path.join(testDir, "group1-file1.ts"), "content1");
+      fs.writeFileSync(path.join(testDir, "group1-file2.ts"), "content2");
+      fs.writeFileSync(path.join(testDir, "group2-file1.ts"), "content3");
+      fs.writeFileSync(path.join(testDir, "group2-file2.ts"), "content4");
+      fs.writeFileSync(path.join(testDir, "group3-file1.ts"), "content5");
+
+      const gitService = new GitService(mockWorkspaceProvider);
+
+      // Commit group 1
+      await gitService.stageAndCommit(
+        ["group1-file1.ts", "group1-file2.ts"],
+        "feat: group 1 changes",
+      );
+
+      // Commit group 2
+      await gitService.stageAndCommit(
+        ["group2-file1.ts", "group2-file2.ts"],
+        "fix: group 2 changes",
+      );
+
+      // Commit group 3
+      await gitService.stageAndCommit(
+        ["group3-file1.ts"],
+        "docs: group 3 changes",
+      );
+
+      // Verify all 3 commits exist (plus initial commit = 4 total)
+      const log = await git.log();
+      // Should have initial + 3 group commits
+      assert.ok(
+        log.all.length >= 4,
+        `Expected at least 4 commits, got ${log.all.length}`,
+      );
+
+      // Verify commit messages
+      const messages = log.all.map((c) => c.message);
+      assert.ok(messages.includes("docs: group 3 changes"));
+      assert.ok(messages.includes("fix: group 2 changes"));
+      assert.ok(messages.includes("feat: group 1 changes"));
     });
   });
 
@@ -371,6 +490,135 @@ suite("GitService Test Suite", () => {
         assert.ok(error instanceof Error);
         assert.ok((error as Error).message.includes("workspace"));
       }
+    });
+  });
+
+  suite("hasPreCommitHook", () => {
+    test("should return false when no pre-commit hook exists", async () => {
+      const gitService = new GitService(mockWorkspaceProvider);
+      const hasHook = await gitService.hasPreCommitHook();
+      assert.strictEqual(hasHook, false);
+    });
+
+    test("should return true when pre-commit hook exists", async () => {
+      const hooksDir = path.join(testDir, ".git", "hooks");
+      fs.mkdirSync(hooksDir, { recursive: true });
+      fs.writeFileSync(path.join(hooksDir, "pre-commit"), "#!/bin/sh\nexit 0", {
+        mode: 0o755,
+      });
+
+      const gitService = new GitService(mockWorkspaceProvider);
+      const hasHook = await gitService.hasPreCommitHook();
+      assert.strictEqual(hasHook, true);
+    });
+
+    test("should return false when pre-commit hook exists but is not executable", async () => {
+      const hooksDir = path.join(testDir, ".git", "hooks");
+      fs.mkdirSync(hooksDir, { recursive: true });
+      fs.writeFileSync(path.join(hooksDir, "pre-commit"), "#!/bin/sh\nexit 0", {
+        mode: 0o644,
+      });
+
+      const gitService = new GitService(mockWorkspaceProvider);
+      const hasHook = await gitService.hasPreCommitHook();
+      assert.strictEqual(hasHook, false);
+    });
+  });
+
+  suite("getRecentCommitMessages", () => {
+    test("should return recent commit messages", async () => {
+      // The test repo has an initial commit already
+      // Add a few more commits
+      fs.writeFileSync(path.join(testDir, "msg-test1.ts"), "content1");
+      await git.add("msg-test1.ts");
+      await git.commit("feat: add message test 1");
+
+      fs.writeFileSync(path.join(testDir, "msg-test2.ts"), "content2");
+      await git.add("msg-test2.ts");
+      await git.commit("fix: resolve message test 2");
+
+      const gitService = new GitService(mockWorkspaceProvider);
+      const messages = await gitService.getRecentCommitMessages(5);
+
+      assert.ok(
+        messages.length >= 3,
+        `Expected at least 3 messages, got ${messages.length}`,
+      );
+      assert.ok(messages.includes("fix: resolve message test 2"));
+      assert.ok(messages.includes("feat: add message test 1"));
+      assert.ok(messages.includes("Initial commit"));
+    });
+
+    test("should return empty array for new repo with no commits", async () => {
+      // Create a brand new repo with no commits
+      const emptyDir = path.join(os.tmpdir(), `splitify-empty-${Date.now()}`);
+      fs.mkdirSync(emptyDir, { recursive: true });
+      const emptyGit = simpleGit(emptyDir);
+      await emptyGit.init();
+
+      const emptyProvider = createMockWorkspaceProvider(emptyDir);
+      const gitService = new GitService(emptyProvider);
+      const messages = await gitService.getRecentCommitMessages(10);
+
+      assert.deepStrictEqual(messages, []);
+
+      // Cleanup
+      fs.rmSync(emptyDir, { recursive: true, force: true });
+    });
+
+    test("should respect the count parameter", async () => {
+      // Add multiple commits
+      for (let i = 0; i < 5; i++) {
+        fs.writeFileSync(
+          path.join(testDir, `count-test-${i}.ts`),
+          `content${i}`,
+        );
+        await git.add(`count-test-${i}.ts`);
+        await git.commit(`commit ${i}`);
+      }
+
+      const gitService = new GitService(mockWorkspaceProvider);
+      const messages = await gitService.getRecentCommitMessages(3);
+
+      assert.strictEqual(messages.length, 3, "Should only return 3 messages");
+    });
+  });
+
+  suite("stageAndCommit --no-verify", () => {
+    test("should pass --no-verify flag when specified", async () => {
+      // Create a pre-commit hook that would fail
+      const hooksDir = path.join(testDir, ".git", "hooks");
+      fs.mkdirSync(hooksDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(hooksDir, "pre-commit"),
+        "#!/bin/sh\nexit 1", // Hook that always rejects
+        { mode: 0o755 },
+      );
+
+      const file = path.join(testDir, "no-verify-test.ts");
+      fs.writeFileSync(file, "no-verify content");
+
+      const gitService = new GitService(mockWorkspaceProvider);
+
+      // Without --no-verify, commit should fail (hook rejects)
+      try {
+        await gitService.stageAndCommit(["no-verify-test.ts"], "should fail");
+        assert.fail("Should have thrown due to pre-commit hook");
+      } catch (error) {
+        assert.ok(error instanceof Error);
+      }
+
+      // With --no-verify, commit should succeed
+      const commitHash = await gitService.stageAndCommit(
+        ["no-verify-test.ts"],
+        "feat: no-verify test",
+        true, // noVerify = true
+      );
+
+      assert.ok(commitHash, "Should return commit hash with --no-verify");
+
+      const log = await git.log({ maxCount: 1 });
+      assert.strictEqual(log.latest?.message, "feat: no-verify test");
     });
   });
 });
