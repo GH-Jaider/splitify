@@ -2,7 +2,12 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { constants as fsConstants } from "node:fs";
-import simpleGit, { Options, SimpleGit, StatusResult } from "simple-git";
+import simpleGit, {
+  FileStatusResult,
+  Options,
+  SimpleGit,
+  StatusResult,
+} from "simple-git";
 import { FileChange, ChangesSummary } from "./types";
 
 /**
@@ -67,23 +72,40 @@ export class GitService {
   async getAllChanges(): Promise<ChangesSummary> {
     const git = this.ensureGit();
     const status: StatusResult = await git.status();
+    const lastModifiedCache = new Map<string, Promise<string | undefined>>();
 
     const staged: FileChange[] = [];
     const unstaged: FileChange[] = [];
     const untracked: FileChange[] = [];
 
-    // Process staged files
-    for (const file of status.staged) {
-      const diff = await this.getFileDiff(file, true);
-      staged.push(this.createFileChange(file, diff, "staged", status));
-    }
+    const getLastModifiedAt = (filePath: string, originalPath?: string) => {
+      const cacheKey = filePath;
+      if (!lastModifiedCache.has(cacheKey)) {
+        lastModifiedCache.set(
+          cacheKey,
+          this.getFileLastModifiedAt(filePath, originalPath),
+        );
+      }
+      return lastModifiedCache.get(cacheKey)!;
+    };
 
-    // Process modified (unstaged) files
-    for (const file of status.modified) {
-      // Skip if already in staged (file can be partially staged)
-      if (!status.staged.includes(file)) {
-        const diff = await this.getFileDiff(file, false);
-        unstaged.push(this.createFileChange(file, diff, "unstaged", status));
+    for (const file of status.files) {
+      if (file.index === "?" && file.working_dir === "?") {
+        continue;
+      }
+
+      const lastModifiedAt = await getLastModifiedAt(file.path, file.from);
+
+      if (this.hasStagedChange(file)) {
+        const diff = await this.getFileDiff(file.path, true);
+        staged.push(this.createFileChange(file, diff, status, lastModifiedAt));
+      }
+
+      if (this.hasUnstagedChange(file) && !this.hasStagedChange(file)) {
+        const diff = await this.getFileDiff(file.path, false);
+        unstaged.push(
+          this.createFileChange(file, diff, status, lastModifiedAt),
+        );
       }
     }
 
@@ -95,6 +117,7 @@ export class GitService {
         diff: "", // Untracked files don't have a diff
         additions: 0,
         deletions: 0,
+        lastModifiedAt: await getLastModifiedAt(file),
       });
     }
 
@@ -107,6 +130,20 @@ export class GitService {
       untracked,
       totalFiles: all.length,
     };
+  }
+
+  /**
+   * Check whether a file has staged index changes.
+   */
+  private hasStagedChange(fileStatus: FileStatusResult): boolean {
+    return fileStatus.index !== " " && fileStatus.index !== "?";
+  }
+
+  /**
+   * Check whether a file has unstaged working tree changes.
+   */
+  private hasUnstagedChange(fileStatus: FileStatusResult): boolean {
+    return fileStatus.working_dir !== " " && fileStatus.working_dir !== "?";
   }
 
   /**
@@ -132,19 +169,28 @@ export class GitService {
    * Create a FileChange object from git status info
    */
   private createFileChange(
-    filePath: string,
+    fileStatus: FileStatusResult,
     diff: string,
-    _source: "staged" | "unstaged",
     status: StatusResult,
+    lastModifiedAt?: string,
   ): FileChange {
+    const filePath = fileStatus.path;
     let changeStatus: FileChange["status"] = "modified";
 
-    if (status.created.includes(filePath)) {
-      changeStatus = "added";
-    } else if (status.deleted.includes(filePath)) {
-      changeStatus = "deleted";
-    } else if (status.renamed.some((r) => r.to === filePath)) {
+    if (
+      fileStatus.index === "R" ||
+      fileStatus.working_dir === "R" ||
+      status.renamed.some((entry) => entry.to === filePath)
+    ) {
       changeStatus = "renamed";
+    } else if (
+      fileStatus.index === "D" ||
+      fileStatus.working_dir === "D" ||
+      status.deleted.includes(filePath)
+    ) {
+      changeStatus = "deleted";
+    } else if (fileStatus.index === "A" || status.created.includes(filePath)) {
+      changeStatus = "added";
     }
 
     // Count additions and deletions from diff
@@ -157,15 +203,65 @@ export class GitService {
       diff,
       additions,
       deletions,
+      lastModifiedAt,
     };
 
     // Add original path for renamed files
-    const renamedEntry = status.renamed.find((r) => r.to === filePath);
+    const renamedEntry =
+      status.renamed.find((r) => r.to === filePath) ??
+      (fileStatus.from ? { from: fileStatus.from, to: filePath } : undefined);
     if (renamedEntry) {
       fileChange.originalPath = renamedEntry.from;
     }
 
     return fileChange;
+  }
+
+  /**
+   * Resolve the file last-modified date from filesystem metadata or git history.
+   */
+  private async getFileLastModifiedAt(
+    filePath: string,
+    originalPath?: string,
+  ): Promise<string | undefined> {
+    if (!this.workspaceRoot) {
+      return undefined;
+    }
+
+    try {
+      const stats = await fs.stat(path.join(this.workspaceRoot, filePath));
+      if (!Number.isNaN(stats.mtimeMs) && stats.mtimeMs > 0) {
+        return stats.mtime.toISOString();
+      }
+    } catch {
+      // Fall back to git history below.
+    }
+
+    const git = this.ensureGit();
+    const historyCandidates = [
+      ...new Set([filePath, originalPath].filter(Boolean)),
+    ];
+
+    for (const historyPath of historyCandidates) {
+      try {
+        const logOutput = await git.raw([
+          "log",
+          "-1",
+          "--follow",
+          "--format=%aI",
+          "--",
+          historyPath!,
+        ]);
+        const timestamp = logOutput.trim();
+        if (timestamp) {
+          return timestamp;
+        }
+      } catch {
+        // Keep trying remaining candidates.
+      }
+    }
+
+    return undefined;
   }
 
   /**

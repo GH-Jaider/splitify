@@ -14,12 +14,19 @@ Usually, you’d sigh, `git add .`, and commit it all as _"updates"_ (we know yo
 
 Run **Splitify: Analyze & Group Changes** from the Command Palette. We send your diffs to the AI, which attempts to untangle your spaghetti code into logical, atomic groups. It’s like `git add --patch`, but for people who value their sanity.
 
+If you already staged files, Splitify analyzes those first instead of peeking at the rest of your working tree like an overcaffeinated intern. This makes it much safer to say “group what I actually intend to commit,” not “group every questionable life choice from today.”
+
+Renamed and deleted files are part of the analysis too. No more pretending that `git mv` is invisible magic or that removed files were “never really there.”
+
+We also include last modification timestamps when we can infer them from the filesystem or git history. That gives the model one more clue for commit ordering, which is useful when your branch reads like three separate ideas wearing the same trench coat.
+
 ### Commit Groups View
 
 Once the AI has done the heavy lifting, a **Splitify - Commit Groups** tree appears in your Source Control panel. This is your staging ground.
 
 - **Review:** See the files and the proposed commit message.
 - **Cherry-pick:** Check the boxes to commit specific groups now, and leave others for later.
+- **Squash with dignity:** Collapse selected groups into a single commit when the AI was technically correct but your branch only deserves one commit and a firm handshake. Splitify also suggests a combined commit message, because staring at three decent messages and inventing a fourth is a ridiculous use of your afternoon.
 - **Edit:** If the AI hallucinates a commit message, you can edit it inline.
 - **Reorganize:** Drag and drop files between groups. Sometimes the robot gets it wrong; you’re still the boss.
 - **Commit:** Fire off a single group or batch commit everything sequentially.
@@ -79,6 +86,7 @@ Some things just don't need AI analysis. Exclude lock files or build artifacts t
 | **Splitify: Analyze & Group Changes** | The "Fix My Mess" button.                   | --           |
 | **Splitify: Commit This Group**       | Commit just the focused group.              | --           |
 | **Splitify: Commit All Groups**       | Commit everything in the list, one by one.  | --           |
+| **Splitify: Commit as One**           | Turn selected groups into one respectable commit, with a suggested message. | --      |
 | **Splitify: Commit Selected Groups**  | Commit only what you've checked.            | --           |
 | **Splitify: Edit Commit Message**     | Fix the AI's copywriting.                   | --           |
 | **Splitify: Discard Group**           | Delete the grouping (not the file changes). | --           |

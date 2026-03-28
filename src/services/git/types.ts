@@ -14,6 +14,8 @@ export interface FileChange {
   deletions: number;
   /** Original path (only for renamed files) */
   originalPath?: string;
+  /** Last modification date, from filesystem or git history when available */
+  lastModifiedAt?: string;
 }
 
 /**

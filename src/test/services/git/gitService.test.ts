@@ -138,6 +138,71 @@ suite("GitService Test Suite", () => {
       assert.strictEqual(changes.staged[0].status, "added");
     });
 
+    test("Given a tracked file is removed, when collecting changes, then it should be included as deleted", async () => {
+      const deletedFile = path.join(testDir, "deleted-file.ts");
+      fs.writeFileSync(deletedFile, "export const doomed = true;\n");
+      await git.add("deleted-file.ts");
+      await git.commit("test: add deletable file");
+
+      fs.unlinkSync(deletedFile);
+
+      const gitService = new GitService(mockWorkspaceProvider);
+      const changes = await gitService.getAllChanges();
+
+      assert.strictEqual(changes.unstaged.length, 1);
+      assert.strictEqual(changes.unstaged[0].path, "deleted-file.ts");
+      assert.strictEqual(changes.unstaged[0].status, "deleted");
+    });
+
+    test("Given a tracked file is renamed, when collecting changes, then it should keep original and new paths", async () => {
+      const originalFile = path.join(testDir, "before.ts");
+      const renamedFile = path.join(testDir, "after.ts");
+      fs.writeFileSync(originalFile, "export const before = true;\n");
+      await git.add("before.ts");
+      await git.commit("test: add rename fixture");
+
+      fs.renameSync(originalFile, renamedFile);
+      await git.raw(["add", "-A"]);
+
+      const gitService = new GitService(mockWorkspaceProvider);
+      const changes = await gitService.getAllChanges();
+
+      assert.strictEqual(changes.staged.length, 1);
+      assert.strictEqual(changes.staged[0].path, "after.ts");
+      assert.strictEqual(changes.staged[0].status, "renamed");
+      assert.strictEqual(changes.staged[0].originalPath, "before.ts");
+    });
+
+    test("Given files with repository or filesystem history, when collecting changes, then each change should expose its last modification date", async () => {
+      const trackedFile = path.join(testDir, "created-earlier.ts");
+      fs.writeFileSync(trackedFile, "export const createdEarlier = true;\n");
+      await git.add("created-earlier.ts");
+      await git.commit("test: add tracked creation fixture");
+
+      fs.writeFileSync(trackedFile, "export const createdEarlier = false;\n");
+      const untrackedFile = path.join(testDir, "created-now.ts");
+      fs.writeFileSync(untrackedFile, "export const createdNow = true;\n");
+
+      const gitService = new GitService(mockWorkspaceProvider);
+      const changes = await gitService.getAllChanges();
+
+      const trackedChange = changes.unstaged.find(
+        (change) => change.path === "created-earlier.ts",
+      );
+      const untrackedChange = changes.untracked.find(
+        (change) => change.path === "created-now.ts",
+      );
+
+      assert.ok(
+        trackedChange?.lastModifiedAt,
+        "Tracked files should include a last modification date",
+      );
+      assert.ok(
+        untrackedChange?.lastModifiedAt,
+        "Untracked files should include a last modification date",
+      );
+    });
+
     test("should count additions and deletions correctly", async () => {
       // Modify file with known additions/deletions
       const readmePath = path.join(testDir, "README.md");
