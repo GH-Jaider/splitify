@@ -89,7 +89,9 @@ class MockGitService {
  */
 class MockAIService {
   private mockSuggestions: GroupingSuggestion[] = [];
+  private mockCombinedCommitMessage = "chore: consolidate related changes";
   private shouldFail = false;
+  private shouldFailCombinedMessage = false;
   private lastReceivedChanges: FileChangeInput[] = [];
 
   setMockSuggestions(suggestions: GroupingSuggestion[]): void {
@@ -100,8 +102,32 @@ class MockAIService {
     this.shouldFail = shouldFail;
   }
 
+  setMockCombinedCommitMessage(message: string): void {
+    this.mockCombinedCommitMessage = message;
+  }
+
+  setShouldFailCombinedMessage(shouldFail: boolean): void {
+    this.shouldFailCombinedMessage = shouldFail;
+  }
+
   getLastReceivedChanges(): FileChangeInput[] {
     return this.lastReceivedChanges;
+  }
+
+  async suggestCombinedCommitMessage(
+    _groups: Array<{
+      name: string;
+      message: string;
+      reasoning: string;
+      files: string[];
+    }>,
+    _token: vscode.CancellationToken,
+    _recentCommits?: string[],
+  ): Promise<string> {
+    if (this.shouldFailCombinedMessage) {
+      throw new Error("Combined message suggestion failed");
+    }
+    return this.mockCombinedCommitMessage;
   }
 
   async analyzeAndGroupChanges(
@@ -294,6 +320,37 @@ suite("GroupingEngine Test Suite", () => {
       await groupingEngine.analyzeChanges(mockCancellationToken);
 
       assert.strictEqual(groupingEngine.groups.length, 1);
+    });
+
+    test("Given staged and unstaged changes, when analysis starts, then only staged files should be sent to the AI", async () => {
+      const stagedFile = createMockFileChange("src/staged.ts", "modified");
+      const unstagedFile = createMockFileChange("src/unstaged.ts", "modified");
+      mockGitService.setMockChanges({
+        all: [stagedFile, unstagedFile],
+        staged: [stagedFile],
+        unstaged: [unstagedFile],
+        untracked: [],
+        totalFiles: 2,
+      });
+
+      mockAIService.setMockSuggestions([
+        {
+          name: "staged-only",
+          message: "feat: stage only",
+          files: ["src/staged.ts"],
+          reasoning: "Only staged files should be analyzed first",
+        },
+      ]);
+
+      await groupingEngine.analyzeChanges(mockCancellationToken);
+
+      assert.deepStrictEqual(mockAIService.getLastReceivedChanges(), [
+        {
+          path: "src/staged.ts",
+          diff: "diff for src/staged.ts",
+          status: "modified",
+        },
+      ]);
     });
   });
 
@@ -504,6 +561,120 @@ suite("GroupingEngine Test Suite", () => {
       assert.strictEqual(progressCalls[0].total, 2);
       assert.strictEqual(progressCalls[1].committed, 1);
       assert.strictEqual(progressCalls[1].total, 2);
+    });
+  });
+
+  suite("commitAsSingleCommit", () => {
+    test("Given selected groups, when committing as one, then it should create a single git commit with all unique files", async () => {
+      const files = [
+        createMockFileChange("src/a.ts"),
+        createMockFileChange("src/b.ts"),
+        createMockFileChange("src/c.ts"),
+      ];
+      mockGitService.setMockChanges(createMockChangesSummary(files));
+
+      mockAIService.setMockSuggestions([
+        {
+          name: "group-a",
+          message: "feat: group a",
+          files: ["src/a.ts", "src/b.ts"],
+          reasoning: "Group A",
+        },
+        {
+          name: "group-b",
+          message: "fix: group b",
+          files: ["src/c.ts"],
+          reasoning: "Group B",
+        },
+      ]);
+
+      await groupingEngine.analyzeChanges(mockCancellationToken);
+
+      const result = await groupingEngine.commitAsSingleCommit({
+        message: "feat: one glorious commit",
+      });
+
+      assert.strictEqual(result.success, 1);
+      assert.strictEqual(result.failed, 0);
+      assert.strictEqual(result.cancelled, 0);
+
+      const calls = mockGitService.getStageAndCommitCalls();
+      assert.strictEqual(calls.length, 1);
+      assert.deepStrictEqual(calls[0].paths, [
+        "src/a.ts",
+        "src/b.ts",
+        "src/c.ts",
+      ]);
+      assert.strictEqual(calls[0].message, "feat: one glorious commit");
+      assert.strictEqual(groupingEngine.groups.length, 0);
+    });
+  });
+
+  suite("suggestCombinedCommitMessage", () => {
+    test("should return an AI-suggested message for selected groups", async () => {
+      const files = [
+        createMockFileChange("src/a.ts"),
+        createMockFileChange("src/b.ts"),
+      ];
+      mockGitService.setMockChanges(createMockChangesSummary(files));
+
+      mockAIService.setMockSuggestions([
+        {
+          name: "group-a",
+          message: "feat(auth): add login",
+          files: ["src/a.ts"],
+          reasoning: "Auth work",
+        },
+        {
+          name: "group-b",
+          message: "feat(api): add session endpoint",
+          files: ["src/b.ts"],
+          reasoning: "API work",
+        },
+      ]);
+      mockAIService.setMockCombinedCommitMessage(
+        "feat: combine auth and session flow",
+      );
+
+      await groupingEngine.analyzeChanges(mockCancellationToken);
+
+      const message = await groupingEngine.suggestCombinedCommitMessage({
+        token: mockCancellationToken,
+      });
+
+      assert.strictEqual(message, "feat: combine auth and session flow");
+    });
+
+    test("should fall back to a deterministic message when AI suggestion fails", async () => {
+      const files = [
+        createMockFileChange("src/a.ts"),
+        createMockFileChange("src/b.ts"),
+      ];
+      mockGitService.setMockChanges(createMockChangesSummary(files));
+
+      mockAIService.setMockSuggestions([
+        {
+          name: "group-a",
+          message: "feat(auth): add login",
+          files: ["src/a.ts"],
+          reasoning: "Auth work",
+        },
+        {
+          name: "feat(api): add session endpoint",
+          message: "feat(api): add session endpoint",
+          files: ["src/b.ts"],
+          reasoning: "API work",
+        },
+      ]);
+      mockAIService.setShouldFailCombinedMessage(true);
+
+      await groupingEngine.analyzeChanges(mockCancellationToken);
+
+      const message = await groupingEngine.suggestCombinedCommitMessage({
+        token: mockCancellationToken,
+      });
+
+      assert.strictEqual(message, "feat: consolidate related changes");
     });
   });
 

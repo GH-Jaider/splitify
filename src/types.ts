@@ -38,6 +38,16 @@ export interface IGroupingEngine {
       group: CommitGroupType,
     ) => void;
   }): Promise<CommitAllResult>;
+  /** Commit selected groups as a single commit */
+  commitAsSingleCommit(options: {
+    message: string;
+    groupIds?: string[];
+  }): Promise<CommitAllResult>;
+  /** Suggest a commit message for selected groups that will be committed as one */
+  suggestCombinedCommitMessage(options?: {
+    groupIds?: string[];
+    token?: vscode.CancellationToken;
+  }): Promise<string>;
   /** Remove a group without committing */
   discardGroup(groupId: string): void;
   /** Update a group's commit message */

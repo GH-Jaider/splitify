@@ -1,4 +1,4 @@
-import { FileChangeInput } from "./types";
+import { CommitMessageSuggestionInput, FileChangeInput } from "./types";
 
 /**
  * Maximum characters to include from a diff to avoid context overflow
@@ -18,7 +18,15 @@ export function buildChangesSection(changes: FileChangeInput[]): string {
     .map((c) => {
       const truncatedDiff = c.diff.slice(0, MAX_DIFF_LENGTH);
       const suffix = c.diff.length > MAX_DIFF_LENGTH ? "\n... (truncated)" : "";
-      return `### File: ${c.path}\n\`\`\`diff\n${truncatedDiff}${suffix}\n\`\`\``;
+      const metadata = [
+        c.status ? `Status: ${c.status}` : undefined,
+        c.originalPath ? `Original path: ${c.originalPath}` : undefined,
+        c.lastModifiedAt ? `Last modified at: ${c.lastModifiedAt}` : undefined,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const diffBody = truncatedDiff || "(no diff available)";
+      return `### File: ${c.path}${metadata ? `\n${metadata}` : ""}\n\`\`\`diff\n${diffBody}${suffix}\n\`\`\``;
     })
     .join("\n\n");
 }
@@ -82,4 +90,38 @@ ${changes.map((c, i) => `${i + 1}. ${c.path}`).join("\n")}
 \`\`\`
 
 Respond ONLY with the JSON, no additional text. Ensure every file from the checklist above appears in exactly one group.`;
+}
+
+/**
+ * Builds the prompt for suggesting one commit message for multiple groups.
+ */
+export function buildCombinedCommitMessagePrompt(
+  groups: CommitMessageSuggestionInput[],
+  recentCommits?: string[],
+): string {
+  const commitStyleText = buildCommitStyleSection(recentCommits);
+  const groupsText = groups
+    .map(
+      (group, index) => `### Group ${index + 1}: ${group.name}
+Existing message: ${group.message}
+Reasoning: ${group.reasoning}
+Files: ${group.files.join(", ")}`,
+    )
+    .join("\n\n");
+
+  return `${SYSTEM_CONTEXT}
+
+Suggest a single commit message that combines the following groups into one coherent commit.
+The result should:
+- Preserve the repository's existing commit message style
+- Describe the combined intent, not just concatenate the old messages
+- Stay concise and realistic for an actual git commit
+- Use the group messages, reasoning, file list, and last-modified hints only as signals, not as rigid rules
+${commitStyleText}
+
+## Groups to merge:
+
+${groupsText}
+
+Respond ONLY with the commit message, no JSON, no explanation, no markdown bullets.`;
 }

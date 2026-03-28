@@ -1,7 +1,10 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { AIService } from "../../../services/ai/aiService";
-import { FileChangeInput } from "../../../services/ai/types";
+import {
+  CommitMessageSuggestionInput,
+  FileChangeInput,
+} from "../../../services/ai/types";
 
 suite("AIService Test Suite", () => {
   let aiService: AIService;
@@ -104,6 +107,74 @@ suite("AIService Test Suite", () => {
       assert.ok(prompt.includes("clear, descriptive commit messages"));
       // Should NOT include commit list
       assert.ok(!prompt.includes("initial commit"));
+    });
+
+    test("should include file metadata such as status, original path, and last modification date", () => {
+      const changes: FileChangeInput[] = [
+        {
+          path: "src/new-name.ts",
+          diff: "rename from old-name.ts",
+          status: "renamed",
+          originalPath: "src/old-name.ts",
+          lastModifiedAt: "2026-03-27T10:15:30.000Z",
+        },
+      ];
+
+      const prompt = aiService.buildPrompt(changes);
+
+      assert.ok(prompt.includes("Status: renamed"));
+      assert.ok(prompt.includes("Original path: src/old-name.ts"));
+      assert.ok(prompt.includes("Last modified at: 2026-03-27T10:15:30.000Z"));
+    });
+  });
+
+  suite("buildCombinedCommitMessagePrompt", () => {
+    test("should build a prompt with selected group summaries and commit style hints", () => {
+      const groups: CommitMessageSuggestionInput[] = [
+        {
+          name: "auth-and-api",
+          message: "feat(auth): add login flow",
+          reasoning: "Authentication and API wiring belong together",
+          files: ["src/auth.ts", "src/api.ts"],
+        },
+      ];
+      const recentCommits = [
+        "feat(auth): add signup flow",
+        "fix(api): handle retries",
+        "chore: tidy workspace",
+        "docs: explain setup",
+        "refactor(ui): simplify header",
+      ];
+
+      const prompt = aiService.buildCombinedCommitMessagePrompt(
+        groups,
+        recentCommits,
+      );
+
+      assert.ok(prompt.includes("auth-and-api"));
+      assert.ok(prompt.includes("feat(auth): add login flow"));
+      assert.ok(
+        prompt.includes("Authentication and API wiring belong together"),
+      );
+      assert.ok(prompt.includes("src/auth.ts, src/api.ts"));
+      assert.ok(prompt.includes("feat(auth): add signup flow"));
+      assert.ok(prompt.includes("Respond ONLY with the commit message"));
+    });
+  });
+
+  suite("parseCommitMessageSuggestion", () => {
+    test("should extract a plain commit message from markdown response", () => {
+      const message = aiService.parseCommitMessageSuggestion(
+        "```text\nfeat: combine auth and api flow\n```",
+      );
+
+      assert.strictEqual(message, "feat: combine auth and api flow");
+    });
+
+    test("should throw when commit message suggestion is empty", () => {
+      assert.throws(() => {
+        aiService.parseCommitMessageSuggestion("   \n   ");
+      }, /Failed to parse commit message suggestion/);
     });
   });
 

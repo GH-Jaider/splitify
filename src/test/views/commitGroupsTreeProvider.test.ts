@@ -44,6 +44,9 @@ function createMockGroupingEngine(
     analyzeChanges: async () => groups,
     commitGroup: async () => {},
     commitAllGroups: async () => ({ success: 0, failed: 0, cancelled: 0 }),
+    commitAsSingleCommit: async () => ({ success: 0, failed: 0, cancelled: 0 }),
+    suggestCombinedCommitMessage: async () =>
+      "chore: consolidate related changes",
     discardGroup: () => {},
     updateGroupMessage: () => {},
     clearGroups: () => {},

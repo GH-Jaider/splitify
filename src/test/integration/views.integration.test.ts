@@ -96,6 +96,25 @@ suite("Views Integration Test Suite", () => {
         );
       }
     });
+
+    test("should register commitAsOne command in view title menu", async () => {
+      const extension = vscode.extensions.getExtension(EXTENSION_ID);
+
+      if (extension) {
+        const packageJson = extension.packageJSON;
+        const viewTitleMenus = packageJson.contributes?.menus?.["view/title"];
+
+        const commitAsOneItem = viewTitleMenus?.find(
+          (item: { command: string; when: string }) =>
+            item.command === "splitify.commitAsOne" &&
+            item.when?.includes(VIEW_ID),
+        );
+        assert.ok(
+          commitAsOneItem,
+          "CommitAsOne command should be in view title menu",
+        );
+      }
+    });
   });
 
   suite("View Item Context Menus", () => {

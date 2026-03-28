@@ -35,6 +35,7 @@ suite("Extension Integration Test Suite", () => {
         "splitify.analyze",
         "splitify.commitGroup",
         "splitify.commitAll",
+        "splitify.commitAsOne",
         "splitify.discardGroup",
         "splitify.editGroupMessage",
         "splitify.refresh",

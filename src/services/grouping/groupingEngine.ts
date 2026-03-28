@@ -65,13 +65,16 @@ export class GroupingEngine {
     // Get all changes from git
     const changesSummary = await this.gitService.getAllChanges();
 
-    // Filter out ignored files
-    let filesToAnalyze = changesSummary.all;
-    if (this.ignoreService) {
-      filesToAnalyze = filesToAnalyze.filter(
-        (change) => !this.ignoreService!.shouldIgnore(change.path),
-      );
-    }
+    const ignoreService = this.ignoreService;
+    const filterIgnoredFiles = (changes: FileChange[]) =>
+      ignoreService
+        ? changes.filter((change) => !ignoreService.shouldIgnore(change.path))
+        : changes;
+
+    const stagedChanges = filterIgnoredFiles(changesSummary.staged);
+    const allChanges = filterIgnoredFiles(changesSummary.all);
+    const filesToAnalyze =
+      stagedChanges.length > 0 ? stagedChanges : allChanges;
 
     if (filesToAnalyze.length === 0) {
       throw new Error("No changes to analyze");
@@ -84,6 +87,11 @@ export class GroupingEngine {
     const changesForAI = filesToAnalyze.map((change) => ({
       path: change.path,
       diff: change.diff,
+      status: change.status,
+      ...(change.originalPath ? { originalPath: change.originalPath } : {}),
+      ...(change.lastModifiedAt
+        ? { lastModifiedAt: change.lastModifiedAt }
+        : {}),
     }));
 
     let groupIndex = 0;
@@ -275,6 +283,123 @@ export class GroupingEngine {
     }
 
     return { success, failed, cancelled };
+  }
+
+  /**
+   * Commit multiple pending groups as a single commit.
+   */
+  async commitAsSingleCommit(options: {
+    message: string;
+    groupIds?: string[];
+  }): Promise<CommitAllResult> {
+    const pendingGroups = this._groups.filter(
+      (group) => group.status === "pending",
+    );
+    const groupsToCommit = options.groupIds
+      ? pendingGroups.filter((group) => options.groupIds!.includes(group.id))
+      : [...pendingGroups];
+
+    if (groupsToCommit.length === 0) {
+      return { success: 0, failed: 0, cancelled: 0 };
+    }
+
+    const paths = [
+      ...new Set(
+        groupsToCommit.flatMap((group) => group.files.map((file) => file.path)),
+      ),
+    ];
+    const config = vscode.workspace.getConfiguration("splitify");
+    const noVerify =
+      config.get<string>("preCommitStrategy", "run-once") === "skip";
+
+    try {
+      await this.gitService.stageAndCommit(paths, options.message, noVerify);
+
+      const committedGroupIds = new Set(
+        groupsToCommit.map((group) => group.id),
+      );
+      this._groups = this._groups.filter(
+        (group) => !committedGroupIds.has(group.id),
+      );
+      this._onGroupsChanged.fire(this._groups);
+
+      return { success: 1, failed: 0, cancelled: 0 };
+    } catch (error) {
+      for (const group of groupsToCommit) {
+        group.status = "error";
+      }
+      this._onGroupsChanged.fire(this._groups);
+      throw error;
+    }
+  }
+
+  /**
+   * Suggest a commit message for multiple selected groups.
+   */
+  async suggestCombinedCommitMessage(options?: {
+    groupIds?: string[];
+    token?: vscode.CancellationToken;
+  }): Promise<string> {
+    const pendingGroups = this._groups.filter(
+      (group) => group.status === "pending",
+    );
+    const groupsToDescribe = options?.groupIds
+      ? pendingGroups.filter((group) => options.groupIds!.includes(group.id))
+      : [...pendingGroups];
+
+    if (groupsToDescribe.length === 0) {
+      throw new Error("No groups available for commit message suggestion");
+    }
+
+    if (groupsToDescribe.length === 1) {
+      return groupsToDescribe[0].message;
+    }
+
+    const token = options?.token ?? new vscode.CancellationTokenSource().token;
+    const recentCommits = await this.gitService.getRecentCommitMessages(20);
+
+    try {
+      return await this.aiService.suggestCombinedCommitMessage(
+        groupsToDescribe.map((group) => ({
+          name: group.name,
+          message: group.message,
+          reasoning: group.reasoning,
+          files: group.files.map((file) => file.path),
+        })),
+        token,
+        recentCommits,
+      );
+    } catch {
+      return this.buildFallbackCombinedCommitMessage(groupsToDescribe);
+    }
+  }
+
+  /**
+   * Deterministic fallback when AI-based message suggestion is unavailable.
+   */
+  private buildFallbackCombinedCommitMessage(groups: CommitGroup[]): string {
+    if (groups.length === 0) {
+      return "chore: consolidate related changes";
+    }
+
+    if (groups.length === 1) {
+      return groups[0].message;
+    }
+
+    const extractedTypes = groups
+      .map((group) => {
+        const match = group.message.match(/^([a-z]+)(?:\([^)]+\))?!?:/i);
+        return match ? match[1].toLowerCase() : undefined;
+      })
+      .filter((type): type is string => Boolean(type));
+
+    const commitType =
+      extractedTypes.length === groups.length &&
+      new Set(extractedTypes).size === 1
+        ? extractedTypes[0]
+        : "chore";
+
+    return `${commitType}: consolidate related changes`;
   }
 
   /**

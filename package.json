@@ -2,7 +2,7 @@
   "name": "splitify",
   "displayName": "Splitify",
   "description": "Turn messy, uncommitted changes into clean, atomic commits. Analyzes your local modifications, groups them by intent using Copilot AI, and suggests meaningful commit messages.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "Oktuvida",
   "icon": "images/icon.png",
   "license": "MIT",
@@ -47,6 +47,12 @@
         "command": "splitify.commitAll",
         "title": "Commit All Groups",
         "icon": "$(check-all)",
+        "category": "Splitify"
+      },
+      {
+        "command": "splitify.commitAsOne",
+        "title": "Commit as One",
+        "icon": "$(combine)",
         "category": "Splitify"
       },
       {
@@ -130,6 +136,11 @@
         },
         {
           "command": "splitify.commitAll",
+          "when": "view == splitify.groupsView && splitify.hasGroups",
+          "group": "navigation"
+        },
+        {
+          "command": "splitify.commitAsOne",
           "when": "view == splitify.groupsView && splitify.hasGroups",
           "group": "navigation"
         },

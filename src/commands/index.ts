@@ -3,6 +3,7 @@ import type { IGroupingEngine } from "../types";
 import { createAnalyzeCommand } from "./analyzeChanges";
 import { createCommitGroupCommand } from "./commitGroup";
 import { createCommitAllCommand } from "./commitAll";
+import { createCommitAsOneCommand } from "./commitAsOne";
 import { createCommitSelectedCommand } from "./commitSelected";
 import { createDiscardGroupCommand } from "./discardGroup";
 import { createEditGroupMessageCommand } from "./editGroupMessage";
@@ -28,6 +29,7 @@ export function registerCommands(
     createAnalyzeCommand(getGroupingEngine),
     createCommitGroupCommand(getGroupingEngine),
     createCommitAllCommand(getGroupingEngine),
+    createCommitAsOneCommand(getGroupingEngine, treeProvider),
     createCommitSelectedCommand(getGroupingEngine, treeProvider),
     createDiscardGroupCommand(getGroupingEngine),
     createEditGroupMessageCommand(getGroupingEngine),
@@ -43,6 +45,7 @@ export function registerCommands(
 export { createAnalyzeCommand } from "./analyzeChanges";
 export { createCommitGroupCommand } from "./commitGroup";
 export { createCommitAllCommand } from "./commitAll";
+export { createCommitAsOneCommand } from "./commitAsOne";
 export { createCommitSelectedCommand } from "./commitSelected";
 export { createDiscardGroupCommand } from "./discardGroup";
 export { createEditGroupMessageCommand } from "./editGroupMessage";

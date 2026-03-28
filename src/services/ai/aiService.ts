@@ -1,10 +1,15 @@
 import * as vscode from "vscode";
 import {
+  CommitMessageSuggestionInput,
   FileChangeInput,
   GroupingSuggestion,
   AIGroupingResponse,
 } from "./types";
-import { buildGroupingPrompt, MAX_DIFF_LENGTH } from "./prompts";
+import {
+  buildCombinedCommitMessagePrompt,
+  buildGroupingPrompt,
+  MAX_DIFF_LENGTH,
+} from "./prompts";
 
 /**
  * Service for interacting with AI models to analyze and group code changes
@@ -112,6 +117,37 @@ export class AIService {
    */
   buildPrompt(changes: FileChangeInput[], recentCommits?: string[]): string {
     return buildGroupingPrompt(changes, recentCommits);
+  }
+
+  /**
+   * Builds the prompt used to suggest a single commit message for merged groups.
+   */
+  buildCombinedCommitMessagePrompt(
+    groups: CommitMessageSuggestionInput[],
+    recentCommits?: string[],
+  ): string {
+    return buildCombinedCommitMessagePrompt(groups, recentCommits);
+  }
+
+  /**
+   * Suggest a single commit message for multiple selected groups.
+   */
+  async suggestCombinedCommitMessage(
+    groups: CommitMessageSuggestionInput[],
+    token: vscode.CancellationToken,
+    recentCommits?: string[],
+  ): Promise<string> {
+    if (groups.length === 0) {
+      throw new Error("No groups provided for commit message suggestion");
+    }
+
+    const model = await this.selectCopilotModel();
+    const prompt = this.buildCombinedCommitMessagePrompt(groups, recentCommits);
+    const messages = [vscode.LanguageModelChatMessage.User(prompt)];
+    const response = await model.sendRequest(messages, {}, token);
+    const fullResponse = await this.collectStreamedResponse(response);
+
+    return this.parseCommitMessageSuggestion(fullResponse);
   }
 
   /**
@@ -292,6 +328,34 @@ export class AIService {
       }
       throw new Error(`Failed to parse AI grouping suggestions: ${error}`);
     }
+  }
+
+  /**
+   * Parse a plain-text commit message suggestion returned by the model.
+   */
+  parseCommitMessageSuggestion(response: string): string {
+    const withoutCodeFences = response
+      .replace(/```(?:text|markdown|md)?/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const firstLine = withoutCodeFences
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean);
+
+    const cleaned = firstLine
+      ?.replace(/^(commit message|message)\s*:\s*/i, "")
+      .replace(/^['"`]|['"`]$/g, "")
+      .trim();
+
+    if (!cleaned) {
+      throw new Error(
+        "Failed to parse commit message suggestion: empty response",
+      );
+    }
+
+    return cleaned;
   }
 }
 
