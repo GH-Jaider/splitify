@@ -6,7 +6,7 @@ AI coding tools are a double-edged sword. You spend two hours in a flow state wi
 
 Usually, you’d sigh, `git add .`, and commit it all as _"updates"_ (we know you do it).
 
-**Splitify** is the intervention you need. It analyzes your uncommitted mess using GitHub Copilot directly from VS Code, logically groups files by intent, and generates commit messages that match your project's style. It makes you look organized, even if you aren't.
+**Splitify** is the intervention you need. It analyzes your uncommitted mess using your configured AI model, logically groups files by intent, and generates commit messages that match your project's style. It makes you look organized, even if you aren't.
 
 ## Features
 
@@ -41,10 +41,12 @@ Splitify reads your recent git history to understand your commit style. Does you
 
 ### Configurable AI Model
 
-By default, we use `gpt-4o` via the Copilot API. If you have a preference (or a specific subscription tier), you can swap the brain.
+By default, we use `gpt-4o` via the Copilot API. If you want another brain, configure an API key for OpenAI, OpenRouter, or a custom OpenAI-compatible provider such as Ollama Cloud, Groq, Together, DeepSeek, or LM Studio.
 
-- Run **Splitify: Select AI Model** (`Ctrl+Alt+M` / `Cmd+Alt+M`).
-- Your choice persists across sessions.
+- Run **Splitify: Select or Configure AI Model** (`Ctrl+Alt+M` / `Cmd+Alt+M`).
+- Pick a Copilot model, configure OpenAI/OpenRouter directly, or add a custom OpenAI-compatible base URL.
+- API keys are stored in VS Code SecretStorage, not in your settings file.
+- Your model choice persists across sessions.
 
 ### Pre-Commit Hook Strategies
 
@@ -68,7 +70,7 @@ Some things just don't need AI analysis. Exclude lock files or build artifacts t
 ## Requirements
 
 - **VS Code** 1.85+
-- **GitHub Copilot Extension:** We piggyback off the Copilot Language Model API. You need an active subscription.
+- **AI access:** GitHub Copilot works out of the box when available. You can also configure OpenAI, OpenRouter, or a custom OpenAI-compatible provider with an API key.
 
 ## Extension Settings
 
@@ -93,9 +95,9 @@ Some things just don't need AI analysis. Exclude lock files or build artifacts t
 | **Splitify: Move/Remove**             | Context menu items to move files around.    | --           |
 | **Splitify: Create New Group**        | Manually make an empty group.               | --           |
 | **Splitify: Refresh Analysis**        | Re-roll the dice on the current changes.    | --           |
-| **Splitify: Select AI Model**         | Switch between available Copilot models.    | `Ctrl+Alt+M` |
+| **Splitify: Select or Configure AI Model** | Switch or configure Copilot/OpenAI-compatible models. | `Ctrl+Alt+M` |
 
 ## Known Issues
 
 - **Context Limits:** If you have 50+ modified files with massive diffs, the AI context window might get full. Splitify may truncate the input. If you've changed that much code without committing, consider this a gentle warning to commit more often.
-- **Subscription Check:** You must have Copilot. If the model list is empty, check your wallet (or your organization's permissions).
+- **Provider Access:** Copilot requires the Copilot extension and an active subscription. External providers require a valid API key and a model id accepted by that provider.
