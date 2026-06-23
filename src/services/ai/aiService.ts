@@ -10,6 +10,10 @@ import {
   buildGroupingPrompt,
   MAX_DIFF_LENGTH,
 } from "./prompts";
+import {
+  getProviderForSelection,
+  getSelectedAIModelSelection,
+} from "./providers/providerRegistry";
 
 /**
  * Service for interacting with AI models to analyze and group code changes
@@ -22,13 +26,13 @@ export class AIService {
   }
 
   /**
-   * Analyzes file changes and suggests logical commit groupings using Copilot's LLM
+   * Analyzes file changes and suggests logical commit groupings using the selected AI model
    *
    * @param changes - Array of file changes to analyze
    * @param token - Cancellation token for the operation
    * @param recentCommits - Optional array of recent commit messages for style inference
    * @returns Array of grouping suggestions
-   * @throws Error if no Copilot model is available or changes array is empty
+   * @throws Error if no AI model is available or changes array is empty
    */
   async analyzeAndGroupChanges(
     changes: FileChangeInput[],
@@ -39,69 +43,37 @@ export class AIService {
       throw new Error("No changes to analyze");
     }
 
-    const model = await this.selectCopilotModel();
-
     const prompt = this.buildPrompt(changes, recentCommits);
+    const response = await this.requestTextStream(prompt, token);
 
-    const messages = [vscode.LanguageModelChatMessage.User(prompt)];
-
-    const response = await model.sendRequest(messages, {}, token);
-
-    const fullResponse = await this.collectStreamedResponse(response);
+    const fullResponse = await this.collectTextStream(response);
 
     return this.parseResponse(fullResponse);
   }
 
   /**
-   * Selects the Copilot language model
-   *
-   * @returns The selected language model
-   * @throws Error if no Copilot model is available
+   * Requests a text stream from the selected AI provider.
    */
-  private async selectCopilotModel(): Promise<vscode.LanguageModelChat> {
-    const saved = this.context.globalState.get<{
-      vendor: string;
-      family: string;
-    }>("selectedModel");
-    const { vendor, family } = saved ?? {
-      vendor: "copilot",
-      family: "gpt-4o",
-    };
-
-    const models = await vscode.lm.selectChatModels({ vendor, family });
-
-    if (models.length > 0) {
-      return models[0];
-    }
-
-    // Fallback: try any copilot model
-    const fallbackModels = await vscode.lm.selectChatModels({
-      vendor: "copilot",
-    });
-
-    if (fallbackModels.length > 0) {
-      vscode.window.showWarningMessage(
-        `Splitify: Model "${family}" not available. Using "${fallbackModels[0].name}" instead.`,
-      );
-      return fallbackModels[0];
-    }
-
-    throw new Error(
-      "No Copilot model available. Please ensure GitHub Copilot is installed and activated.",
-    );
+  private async requestTextStream(
+    prompt: string,
+    token: vscode.CancellationToken,
+  ): Promise<AsyncIterable<string>> {
+    const selection = getSelectedAIModelSelection(this.context);
+    const provider = getProviderForSelection(selection);
+    return provider.sendPrompt(selection, this.context, prompt, token);
   }
 
   /**
-   * Collects the streamed response from the language model
+   * Collects the streamed response from the language model.
    *
-   * @param response - The chat response stream
+   * @param response - The chat response stream.
    * @returns The complete response text
    */
-  private async collectStreamedResponse(
-    response: vscode.LanguageModelChatResponse,
+  private async collectTextStream(
+    response: AsyncIterable<string>,
   ): Promise<string> {
     let fullResponse = "";
-    for await (const chunk of response.text) {
+    for await (const chunk of response) {
       fullResponse += chunk;
     }
     return fullResponse;
@@ -141,11 +113,9 @@ export class AIService {
       throw new Error("No groups provided for commit message suggestion");
     }
 
-    const model = await this.selectCopilotModel();
     const prompt = this.buildCombinedCommitMessagePrompt(groups, recentCommits);
-    const messages = [vscode.LanguageModelChatMessage.User(prompt)];
-    const response = await model.sendRequest(messages, {}, token);
-    const fullResponse = await this.collectStreamedResponse(response);
+    const response = await this.requestTextStream(prompt, token);
+    const fullResponse = await this.collectTextStream(response);
 
     return this.parseCommitMessageSuggestion(fullResponse);
   }
@@ -169,16 +139,14 @@ export class AIService {
       throw new Error("No changes to analyze");
     }
 
-    const model = await this.selectCopilotModel();
     const prompt = this.buildPrompt(changes, recentCommits);
-    const messages = [vscode.LanguageModelChatMessage.User(prompt)];
-    const response = await model.sendRequest(messages, {}, token);
+    const response = await this.requestTextStream(prompt, token);
 
     const groups: GroupingSuggestion[] = [];
     let buffer = "";
     let emittedCount = 0;
 
-    for await (const chunk of response.text) {
+    for await (const chunk of response) {
       if (token.isCancellationRequested) {
         break;
       }
