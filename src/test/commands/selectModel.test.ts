@@ -1,5 +1,12 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
+import { buildModelQuickPickItems } from "../../commands/selectModel";
+import {
+  buildOpenAICompatibleSelection,
+  DEFAULT_COPILOT_SELECTION,
+  OPENROUTER_PROVIDER_CONFIG,
+} from "../../services/ai/providers/providerRegistry";
+import type { AvailableAIModel } from "../../services/ai/providers/types";
 
 suite("SelectModel Command Test Suite", () => {
   test("splitify.selectModel command is registered", async () => {
@@ -313,6 +320,49 @@ suite("SelectModel Command Test Suite", () => {
       assert.strictEqual(finalItems.length, 2);
       assert.strictEqual(finalItems[0].label, "GPT-4o");
       assert.strictEqual(finalItems[1].label, "Claude Sonnet");
+    });
+
+    test("should include external provider setup actions", () => {
+      const models: AvailableAIModel[] = [
+        {
+          label: "GPT-4o",
+          description: "gpt-4o",
+          selection: DEFAULT_COPILOT_SELECTION,
+        },
+      ];
+
+      const items = buildModelQuickPickItems(models, DEFAULT_COPILOT_SELECTION);
+
+      assert.ok(items.some((item) => item.label === "Configure OpenAI..."));
+      assert.ok(
+        items.some(
+          (item) => item.label === "Add Custom Compatible Endpoint...",
+        ),
+      );
+    });
+
+    test("should put current external model first", () => {
+      const externalSelection = buildOpenAICompatibleSelection(
+        OPENROUTER_PROVIDER_CONFIG,
+        "openai/gpt-4o",
+      );
+      const models: AvailableAIModel[] = [
+        {
+          label: "GPT-4o",
+          description: "gpt-4o",
+          selection: DEFAULT_COPILOT_SELECTION,
+        },
+        {
+          label: externalSelection.label ?? "OpenRouter / openai/gpt-4o",
+          description: externalSelection.providerName,
+          selection: externalSelection,
+        },
+      ];
+
+      const items = buildModelQuickPickItems(models, externalSelection);
+
+      assert.strictEqual(items[0].label, "$(check) OpenRouter / openai/gpt-4o");
+      assert.strictEqual(items[0].description, "OpenRouter (current)");
     });
   });
 
