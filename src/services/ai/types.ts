@@ -49,3 +49,33 @@ export interface FileChangeInput {
 export interface AIGroupingResponse {
   groups: GroupingSuggestion[];
 }
+
+/** Legacy Copilot-only model selection stored by Splitify <= 1.1.0. */
+export interface LegacyCopilotModelSelection {
+  vendor: string;
+  family: string;
+}
+
+/** Model selection backed by VS Code's Language Model API. */
+export interface CopilotModelSelection extends LegacyCopilotModelSelection {
+  type: "copilot";
+  label?: string;
+}
+
+/** Model selection backed by an OpenAI-compatible HTTP API. */
+export interface OpenAICompatibleModelSelection {
+  type: "openai-compatible";
+  providerId: string;
+  providerName: string;
+  baseUrl: string;
+  modelId: string;
+  apiKeySecretKey: string;
+  requiresApiKey: boolean;
+  label?: string;
+  headers?: Record<string, string>;
+}
+
+/** Persisted model selection. API keys must never be stored here. */
+export type AIModelSelection =
+  | CopilotModelSelection
+  | OpenAICompatibleModelSelection;
