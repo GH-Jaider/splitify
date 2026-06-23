@@ -1,8 +1,8 @@
 {
   "name": "splitify",
   "displayName": "Splitify",
-  "description": "Turn messy, uncommitted changes into clean, atomic commits. Analyzes your local modifications, groups them by intent using Copilot AI, and suggests meaningful commit messages.",
-  "version": "1.1.0",
+  "description": "Turn messy, uncommitted changes into clean, atomic commits. Analyzes your local modifications, groups them by intent using AI, and suggests meaningful commit messages.",
+  "version": "1.2.0",
   "publisher": "Oktuvida",
   "icon": "images/icon.png",
   "license": "MIT",
@@ -22,6 +22,9 @@
     "commits",
     "ai",
     "copilot",
+    "openai",
+    "openrouter",
+    "ollama",
     "productivity",
     "atomic commits"
   ],
@@ -105,7 +108,7 @@
       },
       {
         "command": "splitify.selectModel",
-        "title": "Select AI Model",
+        "title": "Select or Configure AI Model",
         "icon": "$(hubot)",
         "category": "Splitify"
       }
