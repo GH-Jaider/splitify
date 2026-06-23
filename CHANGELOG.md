@@ -11,6 +11,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Added support for OpenAI-compatible AI providers.
 - Added built-in OpenAI and OpenRouter configuration flows.
 - Added custom compatible endpoint configuration for providers such as Ollama Cloud, Groq, Together, and LM Studio.
+- Added external provider management to update API keys or remove saved endpoints.
 - Kept GitHub Copilot as the default model provider.
 - Stored external provider API keys in VS Code SecretStorage.
 - Reduced packaged VSIX contents by excluding development-only files.

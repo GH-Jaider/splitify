@@ -47,6 +47,7 @@ By default, we use `gpt-4o` via the Copilot API. If you want another brain, conf
 - Pick a Copilot model, configure OpenAI/OpenRouter directly, or add a custom OpenAI-compatible base URL.
 - API keys are stored in VS Code SecretStorage, not in your settings file.
 - Your model choice persists across sessions.
+- Use **Manage External Providers** from the same picker to update API keys or remove saved custom endpoints.
 
 ### Pre-Commit Hook Strategies
 
