@@ -339,6 +339,9 @@ suite("SelectModel Command Test Suite", () => {
           (item) => item.label === "Add Custom Compatible Endpoint...",
         ),
       );
+      assert.ok(
+        items.some((item) => item.label === "Manage External Providers..."),
+      );
     });
 
     test("should put current external model first", () => {

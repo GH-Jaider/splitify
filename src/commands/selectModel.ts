@@ -14,17 +14,22 @@ import {
   buildOpenAICompatibleSelection,
   getConfiguredExternalModels,
   getSelectedAIModelSelection,
+  isSameOpenAICompatibleProvider,
   isSameAIModelSelection,
   OPENAI_PROVIDER_CONFIG,
   OPENROUTER_PROVIDER_CONFIG,
   persistSelectedAIModelSelection,
+  removeConfiguredExternalModels,
+  updateConfiguredExternalModels,
 } from "../services/ai/providers/providerRegistry";
 
 type SelectModelAction =
   | "configure-openai"
   | "configure-openrouter"
   | "configure-custom"
-  | "clear-api-key";
+  | "manage-external-providers";
+
+type ExternalProviderManageAction = "update-api-key" | "remove-provider";
 
 interface ModelQuickPickItem extends vscode.QuickPickItem {
   _selection?: AIModelSelection;
@@ -36,8 +41,14 @@ interface ExternalModelQuickPickItem extends vscode.QuickPickItem {
   _manual?: boolean;
 }
 
-interface SecretKeyQuickPickItem extends vscode.QuickPickItem {
-  _secretKey: string;
+interface ExternalProviderQuickPickItem extends vscode.QuickPickItem {
+  _selection: OpenAICompatibleModelSelection;
+  _secretKeys: string[];
+  _modelCount: number;
+}
+
+interface ExternalProviderActionQuickPickItem extends vscode.QuickPickItem {
+  _action: ExternalProviderManageAction;
 }
 
 /**
@@ -130,9 +141,9 @@ export function buildModelQuickPickItems(
       _action: "configure-custom",
     },
     {
-      label: "Clear External Provider API Key...",
-      description: "Remove a stored SecretStorage key",
-      _action: "clear-api-key",
+      label: "Manage External Providers...",
+      description: "Update API keys or remove saved endpoints",
+      _action: "manage-external-providers",
     },
   );
 
@@ -179,8 +190,8 @@ async function runAction(
     case "configure-custom":
       await configureCustomProvider(context);
       return;
-    case "clear-api-key":
-      await clearExternalProviderApiKey(context);
+    case "manage-external-providers":
+      await manageExternalProviders(context);
       return;
     default:
       return;
@@ -372,42 +383,171 @@ async function askForModelId(
   return modelId?.trim();
 }
 
-async function clearExternalProviderApiKey(
+async function manageExternalProviders(
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  const candidates = new Map<string, SecretKeyQuickPickItem>();
-  for (const providerConfig of [
-    OPENAI_PROVIDER_CONFIG,
-    OPENROUTER_PROVIDER_CONFIG,
-  ]) {
-    candidates.set(providerConfig.apiKeySecretKey, {
-      label: providerConfig.providerName,
-      description: providerConfig.baseUrl,
-      _secretKey: providerConfig.apiKeySecretKey,
-    });
-  }
-
-  for (const selection of getConfiguredExternalModels(context)) {
-    candidates.set(selection.apiKeySecretKey, {
-      label: selection.providerName,
-      description: selection.baseUrl,
-      _secretKey: selection.apiKeySecretKey,
-    });
-  }
-
-  const selected = await vscode.window.showQuickPick([...candidates.values()], {
-    title: "Splitify: Clear External Provider API Key",
-    placeHolder: "Select the stored API key to remove",
-  });
-
-  if (!selected) {
+  const providers = await buildExternalProviderManagementItems(context);
+  if (providers.length === 0) {
+    vscode.window.showInformationMessage(
+      "Splitify has no external providers configured.",
+    );
     return;
   }
 
-  await context.secrets.delete(selected._secretKey);
-  vscode.window.showInformationMessage(
-    `Removed stored API key for ${selected.label}`,
+  const selectedProvider = await vscode.window.showQuickPick(providers, {
+    title: "Splitify: Manage External Providers",
+    placeHolder: "Select a provider to update or remove",
+  });
+
+  if (!selectedProvider) {
+    return;
+  }
+
+  const selectedAction = await vscode.window.showQuickPick(
+    buildExternalProviderActionItems(selectedProvider),
+    {
+      title: `Splitify: ${selectedProvider._selection.providerName}`,
+      placeHolder: "Choose what to do with this provider",
+    },
   );
+
+  if (!selectedAction) {
+    return;
+  }
+
+  if (selectedAction._action === "update-api-key") {
+    await updateExternalProviderApiKey(context, selectedProvider);
+    return;
+  }
+
+  await removeExternalProvider(context, selectedProvider);
+}
+
+async function buildExternalProviderManagementItems(
+  context: vscode.ExtensionContext,
+): Promise<ExternalProviderQuickPickItem[]> {
+  const configured = getConfiguredExternalModels(context);
+  const items: ExternalProviderQuickPickItem[] = [];
+
+  for (const selection of configured) {
+    const existing = items.find((item) =>
+      isSameOpenAICompatibleProvider(item._selection, selection),
+    );
+
+    if (existing) {
+      existing._modelCount++;
+      if (!existing._secretKeys.includes(selection.apiKeySecretKey)) {
+        existing._secretKeys.push(selection.apiKeySecretKey);
+      }
+      continue;
+    }
+
+    items.push({
+      label: selection.providerName,
+      description: selection.baseUrl,
+      _selection: selection,
+      _secretKeys: [selection.apiKeySecretKey],
+      _modelCount: 1,
+    });
+  }
+
+  for (const item of items) {
+    const hasApiKey = await hasAnyApiKey(context, item._secretKeys);
+    item.detail = `${item._modelCount} saved model${item._modelCount === 1 ? "" : "s"} - ${hasApiKey ? "API key configured" : "No API key configured"}`;
+  }
+
+  return items;
+}
+
+function buildExternalProviderActionItems(
+  provider: ExternalProviderQuickPickItem,
+): ExternalProviderActionQuickPickItem[] {
+  return [
+    {
+      label: "Update API Key...",
+      description: "Store a new key for this provider",
+      _action: "update-api-key",
+    },
+    {
+      label: "Remove Provider...",
+      description: `Remove ${provider._modelCount} saved model${provider._modelCount === 1 ? "" : "s"} and delete stored keys`,
+      _action: "remove-provider",
+    },
+  ];
+}
+
+async function updateExternalProviderApiKey(
+  context: vscode.ExtensionContext,
+  provider: ExternalProviderQuickPickItem,
+): Promise<void> {
+  const apiKeyInput = await vscode.window.showInputBox({
+    title: `Splitify: Update ${provider._selection.providerName} API Key`,
+    prompt: "Enter the API key to use for this provider.",
+    password: true,
+    ignoreFocusOut: true,
+    validateInput: (value) =>
+      value.trim().length > 0 ? undefined : "Enter an API key",
+  });
+
+  if (apiKeyInput === undefined) {
+    return;
+  }
+
+  const trimmedApiKey = apiKeyInput.trim();
+  for (const secretKey of provider._secretKeys) {
+    await context.secrets.store(secretKey, trimmedApiKey);
+  }
+
+  await updateConfiguredExternalModels(
+    context,
+    (selection) =>
+      isSameOpenAICompatibleProvider(selection, provider._selection),
+    (selection) => ({ ...selection, requiresApiKey: true }),
+  );
+
+  vscode.window.showInformationMessage(
+    `Updated API key for ${provider._selection.providerName}`,
+  );
+}
+
+async function removeExternalProvider(
+  context: vscode.ExtensionContext,
+  provider: ExternalProviderQuickPickItem,
+): Promise<void> {
+  const confirmed = await vscode.window.showWarningMessage(
+    `Remove ${provider._selection.providerName} from Splitify? This deletes its saved models and stored API key.`,
+    { modal: true },
+    "Remove Provider",
+  );
+
+  if (confirmed !== "Remove Provider") {
+    return;
+  }
+
+  for (const secretKey of provider._secretKeys) {
+    await context.secrets.delete(secretKey);
+  }
+
+  await removeConfiguredExternalModels(context, (selection) =>
+    isSameOpenAICompatibleProvider(selection, provider._selection),
+  );
+
+  vscode.window.showInformationMessage(
+    `Removed ${provider._selection.providerName} from Splitify`,
+  );
+}
+
+async function hasAnyApiKey(
+  context: vscode.ExtensionContext,
+  secretKeys: string[],
+): Promise<boolean> {
+  for (const secretKey of secretKeys) {
+    if (await context.secrets.get(secretKey)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function toAvailableExternalModel(

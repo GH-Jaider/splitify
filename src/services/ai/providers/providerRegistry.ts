@@ -112,6 +112,45 @@ export async function rememberConfiguredExternalModel(
   ]);
 }
 
+export async function updateConfiguredExternalModels(
+  context: vscode.ExtensionContext,
+  predicate: (selection: OpenAICompatibleModelSelection) => boolean,
+  update: (
+    selection: OpenAICompatibleModelSelection,
+  ) => OpenAICompatibleModelSelection,
+): Promise<OpenAICompatibleModelSelection[]> {
+  const updated = getConfiguredExternalModels(context).map((selection) =>
+    predicate(selection) ? update(selection) : selection,
+  );
+
+  await context.globalState.update(CONFIGURED_EXTERNAL_MODELS_KEY, updated);
+
+  const selected = getSelectedAIModelSelection(context);
+  if (selected.type === "openai-compatible" && predicate(selected)) {
+    await context.globalState.update(SELECTED_AI_MODEL_KEY, update(selected));
+  }
+
+  return updated;
+}
+
+export async function removeConfiguredExternalModels(
+  context: vscode.ExtensionContext,
+  predicate: (selection: OpenAICompatibleModelSelection) => boolean,
+): Promise<OpenAICompatibleModelSelection[]> {
+  const remaining = getConfiguredExternalModels(context).filter(
+    (selection) => !predicate(selection),
+  );
+
+  await context.globalState.update(CONFIGURED_EXTERNAL_MODELS_KEY, remaining);
+
+  const selected = getSelectedAIModelSelection(context);
+  if (selected.type === "openai-compatible" && predicate(selected)) {
+    await persistSelectedAIModelSelection(context, DEFAULT_COPILOT_SELECTION);
+  }
+
+  return remaining;
+}
+
 export function getProviderForSelection(
   selection: AIModelSelection,
 ): AIProvider {
@@ -136,8 +175,7 @@ export function isSameAIModelSelection(
 
   if (a.type === "openai-compatible" && b.type === "openai-compatible") {
     return (
-      a.providerId === b.providerId &&
-      a.baseUrl === b.baseUrl &&
+      normalizeBaseUrl(a.baseUrl) === normalizeBaseUrl(b.baseUrl) &&
       a.modelId === b.modelId
     );
   }
@@ -166,21 +204,29 @@ export function buildCustomOpenAICompatibleConfig(
   providerName: string,
   baseUrl: string,
 ): OpenAICompatibleProviderConfig {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
   const slug =
     providerName
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "custom";
-  const providerId = `custom-${slug}-${Date.now()}`;
+  const providerId = `custom-${slug}-${hashString(normalizedBaseUrl)}`;
 
   return {
     providerId,
     providerName,
-    baseUrl,
+    baseUrl: normalizedBaseUrl,
     apiKeySecretKey: `splitify.provider.${providerId}.apiKey`,
     requiresApiKey: false,
   };
+}
+
+export function isSameOpenAICompatibleProvider(
+  a: OpenAICompatibleModelSelection,
+  b: OpenAICompatibleModelSelection,
+): boolean {
+  return normalizeBaseUrl(a.baseUrl) === normalizeBaseUrl(b.baseUrl);
 }
 
 export function isAIModelSelection(value: unknown): value is AIModelSelection {
@@ -230,4 +276,17 @@ function isOpenAICompatibleSelection(
     typeof candidate.apiKeySecretKey === "string" &&
     typeof candidate.requiresApiKey === "boolean"
   );
+}
+
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, "");
+}
+
+function hashString(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+
+  return hash.toString(36);
 }
